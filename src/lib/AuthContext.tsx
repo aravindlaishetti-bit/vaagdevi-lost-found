@@ -20,10 +20,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadProfile(userId: string) {
     const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
+  .from("profiles")
+  .select("*")
+  .eq("id", userId)
+  .maybeSingle();
 
     console.log("PROFILE DATA:", data);
     console.log("PROFILE ERROR:", error);
