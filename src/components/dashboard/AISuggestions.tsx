@@ -1,333 +1,360 @@
+import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { Match } from "../../types";
-
-type ItemSideProps = {
-  item: NonNullable<Match["lost_item"]>;
-  side: "lost" | "found";
-};
-
-function imageUrl(path?: string) {
-  if (!path) return null;
-
-  return supabase.storage
-    .from("item-images")
-    .getPublicUrl(path).data.publicUrl;
-}
-
-function confidence(score: number) {
-  if (score <= 1) {
-    return Math.round(score * 100);
-  }
-
-  return Math.round(score);
-}
-
-function ItemSide({ item, side }: ItemSideProps) {
-  const image = imageUrl(item.item_images?.[0]?.storage_path);
-
-  return (
-    <Link
-      to={`/items/${item.id}`}
-      className={`group/item flex items-center gap-3 ${
-        side === "found" ? "md:justify-end md:text-right" : ""
-      }`}
-    >
-      {side === "lost" && (
-        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 shadow-sm">
-          {image ? (
-            <img
-              src={image}
-              alt={item.title}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover/item:scale-110"
-            />
-          ) : (
-            <div className="grid h-full place-items-center text-xl">
-              📦
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          {side === "lost" ? "Lost Item" : "Found Item"}
-        </p>
-
-        <p className="mt-1 truncate font-semibold text-slate-900">
-          {item.title}
-        </p>
-
-        <p className="mt-1 truncate text-xs text-slate-500">
-          📍 {item.location}
-        </p>
-      </div>
-
-      {side === "found" && (
-        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 shadow-sm">
-          {image ? (
-            <img
-              src={image}
-              alt={item.title}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover/item:scale-110"
-            />
-          ) : (
-            <div className="grid h-full place-items-center text-xl">
-              🎒
-            </div>
-          )}
-        </div>
-      )}
-    </Link>
-  );
-}
+import { useAuth } from "../../lib/AuthContext";
+import { Item } from "../../types";
 
 export default function AISuggestions() {
-  const navigate = useNavigate();
+  const { profile } = useAuth();
 
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadMatches();
-  }, []);
-
-  async function loadMatches() {
-    setLoading(true);
-
-    const { data, error } = await supabase
-      .from("matches")
-      .select(`
-        id,
-        lost_item_id,
-        found_item_id,
-        similarity_score,
-        status,
-        lost_item:items!matches_lost_item_id_fkey(
-          id,
-          reporter_id,
-          title,
-          type,
-          location,
-          date_occurred,
-          status,
-          item_images(storage_path)
-        ),
-        found_item:items!matches_found_item_id_fkey(
-          id,
-          reporter_id,
-          title,
-          type,
-          location,
-          date_occurred,
-          status,
-          item_images(storage_path)
-        )
-      `)
-      .order("similarity_score", { ascending: false })
-      .limit(5);
-
-    if (error) {
-      console.error("AI matches error:", error);
-      setMatches([]);
+    if (profile?.id) {
+      loadSuggestions();
     } else {
-      setMatches((data as unknown as Match[]) ?? []);
+      setLoading(false);
     }
+  }, [profile?.id]);
 
-    setLoading(false);
+  async function loadSuggestions() {
+    if (!profile?.id) return;
+
+    setLoading(true);
+    setImageUrls({});
+
+    try {
+      const { data: myItems, error: myItemsError } =
+        await supabase
+          .from("items")
+          .select("id, type")
+          .eq("reporter_id", profile.id)
+          .order("created_at", { ascending: false })
+          .limit(10);
+
+      if (myItemsError) {
+        console.error(
+          "AI SUGGESTIONS MY ITEMS ERROR:",
+          myItemsError
+        );
+        setItems([]);
+        return;
+      }
+
+      if (!myItems || myItems.length === 0) {
+        setItems([]);
+        return;
+      }
+
+      const myItemIds = myItems.map((item) => item.id);
+
+      const { data: matches, error: matchesError } =
+        await supabase
+          .from("matches")
+          .select(
+            `
+            id,
+            lost_item_id,
+            found_item_id,
+            similarity_score,
+            status
+          `
+          )
+          .or(
+            `lost_item_id.in.(${myItemIds.join(",")}),found_item_id.in.(${myItemIds.join(",")})`
+          )
+          .order("similarity_score", {
+            ascending: false,
+          })
+          .limit(6);
+
+      if (matchesError) {
+        console.error(
+          "AI SUGGESTIONS MATCH ERROR:",
+          matchesError
+        );
+        setItems([]);
+        return;
+      }
+
+      if (!matches || matches.length === 0) {
+        setItems([]);
+        return;
+      }
+
+      const otherIds: string[] = [];
+
+      for (const match of matches) {
+        const isLostMine = myItemIds.includes(
+          match.lost_item_id
+        );
+
+        const otherId = isLostMine
+          ? match.found_item_id
+          : match.lost_item_id;
+
+        if (otherId && !otherIds.includes(otherId)) {
+          otherIds.push(otherId);
+        }
+      }
+
+      if (otherIds.length === 0) {
+        setItems([]);
+        return;
+      }
+
+      const {
+        data: suggestionItems,
+        error: suggestionError,
+      } = await supabase
+        .from("items")
+        .select(
+          "*, item_images(id, storage_path), profiles(full_name, department)"
+        )
+        .in("id", otherIds);
+
+      if (suggestionError) {
+        console.error(
+          "AI SUGGESTION ITEMS ERROR:",
+          suggestionError
+        );
+        setItems([]);
+        return;
+      }
+
+      const orderedItems = otherIds
+        .map((id) =>
+          suggestionItems?.find(
+            (item) => item.id === id
+          )
+        )
+        .filter(Boolean) as Item[];
+
+      const finalItems = orderedItems.slice(0, 4);
+
+      const urlMap: Record<string, string> = {};
+
+      for (const item of finalItems) {
+        const path =
+          item.item_images?.[0]?.storage_path;
+
+        if (!path) continue;
+
+        const {
+          data: signedData,
+          error: signedError,
+        } = await supabase.storage
+          .from("item-images")
+          .createSignedUrl(path, 60 * 10);
+
+        if (signedError) {
+          console.error(
+            "AI SUGGESTION IMAGE ERROR:",
+            item.id,
+            signedError
+          );
+          continue;
+        }
+
+        if (signedData?.signedUrl) {
+          urlMap[item.id] = signedData.signedUrl;
+        }
+      }
+
+      setImageUrls(urlMap);
+      setItems(finalItems);
+    } catch (error) {
+      console.error(
+        "AI SUGGESTIONS ERROR:",
+        error
+      );
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-xl md:p-8">
-
-      {/* Background glow */}
-      <div className="pointer-events-none absolute -left-24 -top-24 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
-
-      <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl" />
+    <section>
 
       {/* HEADER */}
-      <div className="relative mb-7 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
 
         <div>
-          <div className="mb-3 flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg">
-              🤖
-            </span>
+          <div className="flex items-center gap-2">
 
-            <span className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">
-              AI Matching Engine
-            </span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-lg">
+              🤖
+            </div>
+
+            <h2 className="font-display text-xl font-semibold text-slate-900">
+              AI suggestions
+            </h2>
+
           </div>
 
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            Smart matches
-          </h2>
-
-          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
-            CampusLost AI analyzes reported items and discovers possible
-            lost and found matches automatically.
+          <p className="mt-1 text-sm text-slate-500">
+            Possible matches based on your reports.
           </p>
         </div>
 
-        {/* AI STATUS */}
-        <div className="flex items-center gap-2 self-start rounded-full border border-slate-200 bg-slate-50 px-4 py-2 md:self-auto">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+        <Link
+          to="/search"
+          className="text-xs font-semibold text-blue-600 transition hover:text-blue-700"
+        >
+          View campus board →
+        </Link>
 
-          <span className="text-xs font-semibold text-slate-500">
-            AI Engine Online
-          </span>
-        </div>
       </div>
 
       {/* LOADING */}
       {loading && (
-        <div className="space-y-4">
-          {[1, 2, 3].map((item) => (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+
+          {[1, 2, 3, 4].map((item) => (
             <div
               key={item}
-              className="h-32 animate-pulse rounded-2xl border border-slate-100 bg-slate-50"
-            />
+              className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+            >
+              <div className="aspect-[4/3] animate-pulse bg-slate-100" />
+
+              <div className="space-y-2 p-4">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-slate-100" />
+                <div className="h-3 w-1/2 animate-pulse rounded bg-slate-100" />
+                <div className="h-3 w-2/3 animate-pulse rounded bg-slate-100" />
+              </div>
+            </div>
           ))}
+
         </div>
       )}
 
-      {/* NO MATCHES */}
-      {!loading && matches.length === 0 && (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-10 text-center">
+      {/* EMPTY */}
+      {!loading && items.length === 0 && (
+        <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-6">
 
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-3xl shadow-sm">
-            🤖
+          <div className="flex flex-col items-center text-center sm:flex-row sm:text-left">
+
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+              🤖
+            </div>
+
+            <div className="mt-4 sm:ml-4 sm:mt-0">
+
+              <h3 className="text-sm font-bold text-slate-800">
+                AI is ready to help
+              </h3>
+
+              <p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">
+                Report a lost or found item and our
+                matching system will look for similar
+                reports across campus.
+              </p>
+
+            </div>
+
+            <Link
+              to="/report"
+              className="mt-4 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-700 sm:ml-auto sm:mt-0"
+            >
+              Report an item
+            </Link>
+
           </div>
 
-          <h3 className="mt-4 font-semibold text-slate-900">
-            No AI matches yet
-          </h3>
-
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-            Report a lost or found item. When similar reports are available,
-            CampusLost AI will automatically suggest possible matches here.
-          </p>
-
-          <Link
-            to="/report"
-            className="mt-5 inline-flex items-center rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
-          >
-            Report an Item →
-          </Link>
         </div>
       )}
 
-      {/* MATCHES */}
-      {!loading && matches.length > 0 && (
-        <div className="space-y-4">
+      {/* SUGGESTIONS */}
+      {!loading && items.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 
-          {matches.map((match, index) => {
-            const lost = match.lost_item;
-            const found = match.found_item;
-
-            if (!lost || !found) {
-              return null;
-            }
-
-            const score = confidence(match.similarity_score);
+          {items.map((item) => {
+            const cover = imageUrls[item.id] ?? null;
 
             return (
-              <motion.div
-                key={match.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: 0.4,
-                  delay: index * 0.08,
-                }}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-lg md:p-5"
+              <Link
+                key={item.id}
+                to={`/items/${item.id}`}
+                className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
               >
 
-                <div className="grid gap-5 md:grid-cols-[1fr_auto_1fr] md:items-center">
+                {/* IMAGE */}
+                <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
 
-                  {/* LOST */}
-                  <ItemSide
-                    item={lost}
-                    side="lost"
-                  />
+                  {cover ? (
+                    <img
+                      src={cover}
+                      alt={item.title}
+                      loading="lazy"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      onError={() => {
+                        console.error(
+                          "AI IMAGE LOAD FAILED:",
+                          item.id,
+                          cover
+                        );
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-4xl text-slate-300">
+                      📦
+                    </div>
+                  )}
 
-                  {/* AI MATCH */}
-                  <div className="flex items-center justify-center md:flex-col">
+                  <span
+                    className={`absolute left-2 top-2 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase text-white shadow-sm ${
+                      item.type === "lost"
+                        ? "bg-red-500"
+                        : "bg-emerald-600"
+                    }`}
+                  >
+                    {item.type}
+                  </span>
 
-                    <div className="hidden h-px w-12 bg-gradient-to-r from-blue-500 to-purple-500 md:block" />
+                  <span className="absolute right-2 top-2 rounded-full bg-white/90 px-2.5 py-1 text-[9px] font-bold text-blue-700 shadow-sm backdrop-blur">
+                    🤖 AI
+                  </span>
 
-                    <div className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2 shadow-sm">
-                      <span className="text-xs font-bold text-blue-600">
-                        🤖 {score}% Match
+                </div>
+
+                {/* CONTENT */}
+                <div className="p-4">
+
+                  <h3 className="line-clamp-1 text-sm font-bold text-slate-900">
+                    {item.title}
+                  </h3>
+
+                  <p className="mt-1.5 line-clamp-1 text-xs text-slate-500">
+                    📍 {item.location}
+                  </p>
+
+                  <div className="mt-3 flex items-center justify-between">
+
+                    {item.category ? (
+                      <span className="max-w-[55%] truncate rounded-full bg-blue-50 px-2.5 py-1 text-[9px] font-semibold text-blue-700">
+                        {item.category}
                       </span>
-                    </div>
+                    ) : (
+                      <span />
+                    )}
 
-                    <div className="hidden h-px w-12 bg-gradient-to-r from-purple-500 to-blue-500 md:block" />
-                  </div>
-
-                  {/* FOUND */}
-                  <ItemSide
-                    item={found}
-                    side="found"
-                  />
-                </div>
-
-                {/* CONFIDENCE */}
-                <div className="mt-5 border-t border-slate-100 pt-4">
-
-                  <div className="flex items-center gap-3">
-
-                    <span className="shrink-0 text-[10px] font-medium text-slate-400">
-                      AI Confidence
-                    </span>
-
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
-
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${score}%` }}
-                        transition={{
-                          duration: 0.8,
-                          delay: index * 0.08,
-                        }}
-                        className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
-                      />
-
-                    </div>
-
-                    <span className="text-xs font-bold text-slate-700">
-                      {score}%
+                    <span className="text-[10px] font-semibold text-blue-600">
+                      View →
                     </span>
 
                   </div>
+
                 </div>
 
-              </motion.div>
+              </Link>
             );
           })}
+
         </div>
       )}
-
-      {/* FOOTER */}
-      <div className="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-
-        <p className="text-xs text-slate-400">
-          Powered by Vaagdevi Lost & Found AI
-        </p>
-
-        {matches.length > 0 && (
-          <button
-            type="button"
-            onClick={() => navigate("/")}
-            className="text-xs font-semibold text-blue-600 transition-colors hover:text-purple-600"
-          >
-            View dashboard →
-          </button>
-        )}
-
-      </div>
 
     </section>
   );

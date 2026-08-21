@@ -1,155 +1,193 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { supabase } from "../../lib/supabaseClient";
+import { useAuth } from "../../lib/AuthContext";
 
-type Stats = {
-  lost: number;
-  found: number;
-  matches: number;
-  claimed: number;
-  total: number;
+type Stat = {
+  label: string;
+  value: number;
+  icon: string;
+  description: string;
 };
 
 export default function DashboardStats() {
-  const [stats, setStats] = useState<Stats>({
-    lost: 0,
-    found: 0,
-    matches: 0,
-    claimed: 0,
-    total: 0,
-  });
+  const { profile } = useAuth();
+
+  const [stats, setStats] = useState<Stat[]>([
+    {
+      label: "Lost Items",
+      value: 0,
+      icon: "🔴",
+      description: "Items reported lost",
+    },
+    {
+      label: "Found Items",
+      value: 0,
+      icon: "🟢",
+      description: "Items reported found",
+    },
+    {
+      label: "My Reports",
+      value: 0,
+      icon: "📋",
+      description: "Your submitted reports",
+    },
+    {
+      label: "Matches",
+      value: 0,
+      icon: "🤝",
+      description: "AI suggested matches",
+    },
+  ]);
 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadStats();
-  }, []);
+    if (profile?.id) {
+      loadStats();
+    }
+  }, [profile?.id]);
 
   async function loadStats() {
+    if (!profile?.id) return;
+
+    setLoading(true);
+
     try {
-      setLoading(true);
+      const [
+        lostResult,
+        foundResult,
+        mineResult,
+        matchesResult,
+      ] = await Promise.all([
+        supabase
+          .from("items")
+          .select("id", { count: "exact", head: true })
+          .eq("type", "lost"),
 
-      const { data: items, error: itemsError } = await supabase
-        .from("items")
-        .select("type, status");
+        supabase
+          .from("items")
+          .select("id", { count: "exact", head: true })
+          .eq("type", "found"),
 
-      if (itemsError) {
-        console.error("Items stats error:", itemsError);
-        return;
+        supabase
+          .from("items")
+          .select("id", { count: "exact", head: true })
+          .eq("reporter_id", profile.id),
+
+        supabase
+          .from("matches")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "suggested"),
+      ]);
+
+      if (lostResult.error) {
+        console.error(
+          "LOST ITEMS COUNT ERROR:",
+          lostResult.error
+        );
       }
 
-      const { count: matchCount, error: matchesError } = await supabase
-        .from("matches")
-        .select("*", { count: "exact", head: true });
-
-      if (matchesError) {
-        console.error("Matches stats error:", matchesError);
+      if (foundResult.error) {
+        console.error(
+          "FOUND ITEMS COUNT ERROR:",
+          foundResult.error
+        );
       }
 
-      const itemList = items ?? [];
+      if (mineResult.error) {
+        console.error(
+          "MY REPORTS COUNT ERROR:",
+          mineResult.error
+        );
+      }
 
-      setStats({
-        lost: itemList.filter((item) => item.type === "lost").length,
-        found: itemList.filter((item) => item.type === "found").length,
-        matches: matchCount ?? 0,
-        claimed: itemList.filter((item) => item.status === "claimed").length,
-        total: itemList.length,
-      });
+      if (matchesResult.error) {
+        console.error(
+          "MATCHES COUNT ERROR:",
+          matchesResult.error
+        );
+      }
+
+      setStats([
+        {
+          label: "Lost Items",
+          value: lostResult.count ?? 0,
+          icon: "🔴",
+          description: "Items reported lost",
+        },
+        {
+          label: "Found Items",
+          value: foundResult.count ?? 0,
+          icon: "🟢",
+          description: "Items reported found",
+        },
+        {
+          label: "My Reports",
+          value: mineResult.count ?? 0,
+          icon: "📋",
+          description: "Your submitted reports",
+        },
+        {
+          label: "Matches",
+          value: matchesResult.count ?? 0,
+          icon: "🤝",
+          description: "AI suggested matches",
+        },
+      ]);
+    } catch (error) {
+      console.error("DASHBOARD STATS ERROR:", error);
     } finally {
       setLoading(false);
     }
   }
 
-  const successRate =
-    stats.total > 0
-      ? Math.round((stats.claimed / stats.total) * 100)
-      : 0;
-
-  const statCards = [
-    {
-      label: "Lost Items",
-      value: stats.lost,
-      icon: "📦",
-      description: "Items reported lost",
-    },
-    {
-      label: "Found Items",
-      value: stats.found,
-      icon: "🎒",
-      description: "Items reported found",
-    },
-    {
-      label: "AI Matches",
-      value: stats.matches,
-      icon: "🤖",
-      description: "Possible matches detected",
-    },
-    {
-      label: "Recovery Rate",
-      value: successRate,
-      suffix: "%",
-      icon: "🎯",
-      description: "Items successfully claimed",
-    },
-  ];
-
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      {statCards.map((stat, index) => (
-        <motion.div
+    <section className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+
+      {stats.map((stat) => (
+        <div
           key={stat.label}
-          initial={{ opacity: 0, y: 25 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            duration: 0.5,
-            delay: index * 0.1,
-          }}
-          whileHover={{
-            y: -6,
-            scale: 1.02,
-          }}
-          className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow duration-300 hover:shadow-xl"
+          className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg sm:p-5"
         >
-          <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-blue-500/10 blur-3xl transition-all duration-500 group-hover:bg-purple-500/20" />
 
-          <div className="relative">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 text-xl shadow-lg">
-                {stat.icon}
-              </div>
+          <div className="flex items-start justify-between gap-3">
 
-              <span className="text-xs font-medium text-slate-400">
-                LIVE
-              </span>
+            {/* ICON */}
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-xl transition group-hover:scale-105 sm:h-11 sm:w-11">
+              {stat.icon}
             </div>
 
-            <p className="text-sm font-medium text-slate-500">
+            {/* VALUE */}
+            <div className="text-right">
+
+              {loading ? (
+                <div className="ml-auto h-7 w-10 animate-pulse rounded-md bg-slate-100" />
+              ) : (
+                <p className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                  {stat.value}
+                </p>
+              )}
+
+            </div>
+
+          </div>
+
+          {/* LABEL */}
+          <div className="mt-4">
+
+            <p className="text-sm font-bold text-slate-800 sm:text-base">
               {stat.label}
             </p>
 
-            <div className="mt-1 flex items-baseline gap-1">
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: index * 0.15 + 0.3 }}
-                className="text-3xl font-bold tracking-tight text-slate-900"
-              >
-                {loading ? "—" : stat.value}
-              </motion.span>
-
-              {stat.suffix && (
-                <span className="text-xl font-bold text-blue-600">
-                  {stat.suffix}
-                </span>
-              )}
-            </div>
-
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-[11px] leading-4 text-slate-400 sm:text-xs">
               {stat.description}
             </p>
+
           </div>
-        </motion.div>
+
+        </div>
       ))}
-    </div>
+
+    </section>
   );
 }

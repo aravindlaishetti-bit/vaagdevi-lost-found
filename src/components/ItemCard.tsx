@@ -2,93 +2,132 @@ import { Link } from "react-router-dom";
 import { Item } from "../types";
 import { supabase } from "../lib/supabaseClient";
 import clsx from "clsx";
-
-function imageUrl(path?: string) {
-  if (!path) return null;
-  return supabase.storage.from("item-images").getPublicUrl(path).data.publicUrl;
-}
+import { useEffect, useState } from "react";
 
 export function ItemCard({ item }: { item: Item }) {
-  const cover = item.item_images?.[0]?.storage_path
-    ? imageUrl(item.item_images[0].storage_path)
-    : null;
+  const [cover, setCover] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadImage() {
+      const path = item.item_images?.[0]?.storage_path;
+
+      if (!path) {
+        setCover(null);
+        return;
+      }
+
+      const { data, error } = await supabase.storage
+        .from("item-images")
+        .createSignedUrl(path, 60 * 10);
+
+      if (error) {
+        console.error("ITEM CARD IMAGE ERROR:", error);
+        if (!cancelled) setCover(null);
+        return;
+      }
+
+      if (!cancelled) {
+        setCover(data.signedUrl);
+      }
+    }
+
+    loadImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [item.item_images]);
+
+  const isLost = item.type === "lost";
 
   return (
     <Link
       to={`/items/${item.id}`}
-      className="group overflow-hidden rounded-3xl bg-white border border-slate-200 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300"
+      className="group block overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
     >
-      {/* Image */}
-      <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+      {/* IMAGE */}
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
         {cover ? (
           <img
             src={cover}
             alt={item.title}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={(e) => {
+              console.error("ITEM CARD IMAGE LOAD FAILED:", cover);
+              e.currentTarget.style.display = "none";
+            }}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-5xl">
+          <div className="flex h-full w-full items-center justify-center text-4xl sm:text-5xl">
             📦
           </div>
         )}
 
-        {/* Lost / Found Badge */}
+        {/* LOST / FOUND */}
         <div
           className={clsx(
-            "absolute left-3 top-3 rounded-full px-3 py-1 text-xs font-semibold shadow-md",
-            item.type === "lost"
+            "absolute left-2 top-2 rounded-full px-2 py-1 text-[9px] font-bold shadow-sm sm:left-3 sm:top-3 sm:px-3 sm:text-xs",
+            isLost
               ? "bg-red-500 text-white"
-              : "bg-green-600 text-white"
+              : "bg-emerald-600 text-white"
           )}
         >
-          {item.type.toUpperCase()}
+          {isLost ? "LOST" : "FOUND"}
         </div>
 
-        {/* Status */}
-        <div className="absolute right-3 top-3 rounded-full bg-white/90 backdrop-blur px-3 py-1 text-xs font-semibold capitalize shadow">
+        {/* STATUS */}
+        <div className="absolute right-2 top-2 max-w-[45%] truncate rounded-full bg-white/90 px-2 py-1 text-[9px] font-semibold capitalize text-slate-700 shadow-sm backdrop-blur sm:right-3 sm:top-3 sm:px-3 sm:text-xs">
           {item.status}
         </div>
       </div>
 
-      {/* Content */}
-      <div className="p-5">
-
-        <h3 className="text-lg font-bold text-slate-900 line-clamp-1">
+      {/* CONTENT */}
+      <div className="p-3 sm:p-5">
+        <h3 className="line-clamp-1 text-sm font-bold text-slate-900 sm:text-lg">
           {item.title}
         </h3>
 
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-1.5 line-clamp-1 text-[11px] text-slate-500 sm:mt-2 sm:text-sm">
           📍 {item.location}
         </p>
 
-        <p className="text-sm text-slate-500">
-          📅 {new Date(item.date_occurred).toLocaleDateString()}
+        <p className="mt-0.5 text-[11px] text-slate-500 sm:text-sm">
+          📅{" "}
+          {item.date_occurred
+            ? new Date(item.date_occurred).toLocaleDateString("en-IN")
+            : "Date unavailable"}
         </p>
 
         {item.category && (
-          <div className="mt-4">
-            <span className="rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-xs font-semibold">
+          <div className="mt-2.5 sm:mt-4">
+            <span className="inline-block max-w-full truncate rounded-full bg-blue-50 px-2 py-1 text-[9px] font-semibold text-blue-700 sm:px-3 sm:text-xs">
               {item.category}
             </span>
           </div>
         )}
 
-        <div className="mt-5 flex items-center justify-between">
+        {item.description && (
+          <p className="mt-2 line-clamp-2 text-[10px] leading-4 text-slate-400 sm:mt-3 sm:text-xs">
+            {item.description}
+          </p>
+        )}
 
-          <span className="text-xs text-slate-400">
-            AI Confidence
+        <div className="mt-3 flex items-center justify-between gap-2 sm:mt-5">
+          <span className="text-[9px] text-slate-400 sm:text-xs">
+            AI Analysis
           </span>
 
-          <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-bold text-green-700">
-            95%
+          <span className="shrink-0 rounded-full bg-purple-50 px-2 py-1 text-[10px] font-semibold text-purple-700 sm:px-3 sm:text-xs">
+            ✨ Analyzed
           </span>
-
         </div>
 
-        <button className="mt-5 w-full rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700">
+        <div className="mt-3 w-full rounded-xl bg-brand-600 py-2 text-center text-[11px] font-semibold text-white transition group-hover:bg-brand-700 sm:mt-5 sm:py-2.5 sm:text-sm">
           View Details →
-        </button>
-
+        </div>
       </div>
     </Link>
   );

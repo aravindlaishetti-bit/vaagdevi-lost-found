@@ -13,7 +13,9 @@ export default function ReportItem() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
-  const [dateOccurred, setDateOccurred] = useState(new Date().toISOString().slice(0, 10));
+  const [dateOccurred, setDateOccurred] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -27,12 +29,16 @@ export default function ReportItem() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+
     if (!profile) return;
+
     setError(null);
+    setStatus(null);
     setSubmitting(true);
 
     try {
       setStatus("Saving item…");
+
       const { data: item, error: insertErr } = await supabase
         .from("items")
         .insert({
@@ -45,250 +51,366 @@ export default function ReportItem() {
         })
         .select()
         .single();
+
       if (insertErr) throw insertErr;
 
       if (file) {
         setStatus("Uploading photo…");
+
         const path = `${profile.id}/${item.id}/${crypto.randomUUID()}-${file.name}`;
-        const { error: uploadErr } = await supabase.storage.from("item-images").upload(path, file);
+
+        const { error: uploadErr } = await supabase.storage
+          .from("item-images")
+          .upload(path, file);
+
         if (uploadErr) throw uploadErr;
 
-        await supabase.from("item_images").insert({ item_id: item.id, storage_path: path });
-
-        setStatus("Running AI analysis (image recognition, OCR, color & match scoring)…");
-        const { error: fnErr } = await supabase.functions.invoke("analyze-item", {
-          body: { item_id: item.id },
+        await supabase.from("item_images").insert({
+          item_id: item.id,
+          storage_path: path,
         });
-        if (fnErr) console.warn("AI analysis failed, item is still saved:", fnErr);
+
+        setStatus(
+          "Running AI analysis (image recognition, OCR, color & match scoring)…"
+        );
+
+        const { error: fnErr } = await supabase.functions.invoke(
+          "analyze-item",
+          {
+            body: { item_id: item.id },
+          }
+        );
+
+        if (fnErr) {
+          console.warn(
+            "AI analysis failed, item is still saved:",
+            fnErr
+          );
+        }
       }
 
       setStatus("Done!");
+
       navigate(`/items/${item.id}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong"
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <div className="mb-8 rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 p-8 text-white shadow-xl">
-  <p className="mb-2 text-sm font-semibold uppercase tracking-widest opacity-90">
-    🚀 CampusLost AI
-  </p>
+    <div className="mx-auto w-full max-w-3xl px-3 py-4 sm:px-4 sm:py-8">
 
-  <h1 className="text-4xl font-bold">
-    Report Lost or Found Item
-  </h1>
+      {/* PAGE HERO */}
+      <div className="mb-5 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 p-5 text-white shadow-xl sm:mb-8 sm:rounded-3xl sm:p-8">
 
-  <p className="mt-3 max-w-2xl text-blue-100">
-    Upload a clear image. Our AI automatically detects the item's category,
-    color, visible text, and finds similar lost or found reports across the campus.
-  </p>
-</div>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] opacity-90 sm:text-sm sm:tracking-widest">
+          🚀 Vaagdevi Lost & Found AI
+        </p>
 
+        <h1 className="text-2xl font-bold leading-tight sm:text-4xl">
+          Report Lost or Found Item
+        </h1>
+
+        <p className="mt-3 max-w-2xl text-xs leading-5 text-blue-100 sm:text-base sm:leading-6">
+          Upload a clear image. Our AI automatically detects the item's
+          category, color, visible text, and finds similar lost or found
+          reports across Vaagdevi College.
+        </p>
+      </div>
+
+      {/* FORM */}
       <form
-  onSubmit={handleSubmit}
-  className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl space-y-6"
->
-        <div className="flex gap-2">
-          {(["lost", "found"] as ItemType[]).map((t) => (
-            <button
-              type="button"
-              key={t}
-              onClick={() => setType(t)}
-              className={clsx(
-                "flex-1 rounded-lg border py-2.5 text-sm font-semibold capitalize",
-                type === t ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 text-slate-600"
-              )}
-            >
-              I {t === "lost" ? "lost" : "found"} something
-            </button>
-          ))}
+        onSubmit={handleSubmit}
+        className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl sm:space-y-6 sm:rounded-3xl sm:p-8"
+      >
+
+        {/* TYPE */}
+        <div>
+          <label className="label mb-2 block">
+            What happened?
+          </label>
+
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+
+            {(["lost", "found"] as ItemType[]).map((t) => (
+              <button
+                type="button"
+                key={t}
+                onClick={() => setType(t)}
+                className={clsx(
+                  "min-h-[48px] rounded-xl border px-2 py-3 text-xs font-semibold transition-all sm:rounded-xl sm:text-sm",
+                  type === t
+                    ? "border-brand-600 bg-brand-600 text-white shadow-md"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                {t === "lost"
+                  ? "🔍 I lost something"
+                  : "🎒 I found something"}
+              </button>
+            ))}
+
+          </div>
         </div>
 
+        {/* TITLE */}
         <div>
-          <label className="label">Title</label>
+          <label className="label">
+            Item Title
+          </label>
+
           <input
             required
             placeholder="e.g. Black Dell laptop bag"
-            className="input"
+            className="input w-full"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
 
+        {/* DESCRIPTION */}
         <div>
-          <label className="label">Description</label>
+          <label className="label">
+            Description
+          </label>
+
           <textarea
             required
-            rows={3}
-            placeholder="Any details that help identify it — brand, contents, stickers, damage…"
-            className="input"
+            rows={4}
+            placeholder="Brand, color, stickers, damage, contents, unique marks..."
+            className="input w-full resize-none"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        {/* LOCATION + DATE */}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+
           <div>
-            <label className="label">Location on campus</label>
+            <label className="label">
+              Location on campus
+            </label>
+
             <input
               required
               placeholder="e.g. Library, 2nd floor"
-              className="input"
+              className="input w-full"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
             />
           </div>
+
           <div>
-            <label className="label">Date</label>
+            <label className="label">
+              Date
+            </label>
+
             <input
               required
               type="date"
-              className="input"
+              className="input w-full"
               value={dateOccurred}
-              onChange={(e) => setDateOccurred(e.target.value)}
+              onChange={(e) =>
+                setDateOccurred(e.target.value)
+              }
             />
           </div>
+
         </div>
 
+        {/* PHOTO UPLOAD */}
         <div>
-  <label className="label mb-3 block">
-    Upload Item Photo
-  </label>
 
-  <label
-    className="
-      flex flex-col items-center justify-center
-      rounded-3xl border-2 border-dashed
-      border-slate-300 bg-slate-50
-      p-10 text-center
-      cursor-pointer
-      transition-all
-      hover:border-blue-500
-      hover:bg-blue-50
-    "
-  >
-    <div className="mb-4 text-5xl">
-      📸
-    </div>
+          <label className="label mb-3 block">
+            Upload Item Photo
+          </label>
 
-    <h3 className="text-lg font-semibold text-slate-800">
-      Drop your image here
-    </h3>
+          <label
+            className="
+              flex min-h-[190px]
+              cursor-pointer flex-col
+              items-center justify-center
+              rounded-2xl border-2 border-dashed
+              border-slate-300
+              bg-slate-50
+              px-4 py-8
+              text-center
+              transition-all
+              hover:border-blue-500
+              hover:bg-blue-50
+              sm:min-h-[240px]
+              sm:rounded-3xl
+              sm:p-10
+            "
+          >
 
-    <p className="mt-2 text-sm text-slate-500">
-      or click to browse from your device
-    </p>
+            <div className="mb-3 text-4xl sm:mb-4 sm:text-5xl">
+              📸
+            </div>
 
-    <p className="mt-3 text-xs text-slate-400">
-      AI will analyze category, color & visible text
-    </p>
+            <h3 className="text-base font-semibold text-slate-800 sm:text-lg">
+              Upload your item image
+            </h3>
 
-    <input
-      type="file"
-      accept="image/*"
-      onChange={(e) =>
-        onFileChange(e.target.files?.[0] ?? null)
-      }
-      className="hidden"
-    />
-  </label>
-</div>
-{preview && (
-  <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
-    <h3 className="mb-4 text-lg font-semibold text-slate-800">
-      🤖 CampusLost AI Preview
-    </h3>
+            <p className="mt-2 text-xs text-slate-500 sm:text-sm">
+              Tap here to choose a photo from your phone
+            </p>
 
-    <img
-      src={preview}
-      alt="Uploaded item"
-      className="h-64 w-full rounded-2xl object-cover"
-    />
-    {file && (
-  <div className="mt-3 flex items-center justify-between rounded-xl bg-white p-3">
-    <p className="truncate text-sm text-slate-600">
-      📎 {file.name}
-    </p>
+            <p className="mt-3 text-[10px] text-slate-400 sm:text-xs">
+              AI analyzes category, color & visible text
+            </p>
 
-    <button
-      type="button"
-      onClick={() => onFileChange(null)}
-      className="text-sm font-semibold text-red-500 hover:text-red-700"
-    >
-      Remove
-    </button>
-  </div>
-)}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) =>
+                onFileChange(
+                  e.target.files?.[0] ?? null
+                )
+              }
+              className="hidden"
+            />
 
-    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          </label>
+        </div>
 
-  <div className="rounded-2xl bg-slate-50 p-4">
-    <p className="text-xs text-slate-500">
-      Category
-    </p>
-    <p className="mt-1 font-semibold text-slate-800">
-      🎒 Detecting...
-    </p>
-  </div>
+        {/* PREVIEW */}
+        {preview && (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm sm:rounded-3xl sm:p-5">
 
-  <div className="rounded-2xl bg-slate-50 p-4">
-    <p className="text-xs text-slate-500">
-      Color
-    </p>
-    <p className="mt-1 font-semibold text-slate-800">
-      🎨 Detecting...
-    </p>
-  </div>
+            <div className="mb-4 flex items-center justify-between gap-3">
 
-  <div className="rounded-2xl bg-slate-50 p-4">
-    <p className="text-xs text-slate-500">
-      Visible Text
-    </p>
-    <p className="mt-1 font-semibold text-slate-800">
-      🔍 Scanning...
-    </p>
-  </div>
+              <h3 className="text-base font-semibold text-slate-800 sm:text-lg">
+                🤖 AI Photo Preview
+              </h3>
 
-  <div className="rounded-2xl bg-slate-50 p-4">
-    <p className="text-xs text-slate-500">
-      Match Search
-    </p>
-    <p className="mt-1 font-semibold text-blue-600">
-      🚀 Finding similar reports...
-    </p>
-  </div>
+              <button
+                type="button"
+                onClick={() => onFileChange(null)}
+                className="shrink-0 text-xs font-semibold text-red-500 hover:text-red-700 sm:text-sm"
+              >
+                Remove
+              </button>
 
-</div>
-  </div>
-)}
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {status && submitting && <p className="text-sm text-brand-600">{status}</p>}
+            </div>
 
+            <img
+              src={preview}
+              alt="Uploaded item"
+              className="h-52 w-full rounded-xl object-cover sm:h-72 sm:rounded-2xl"
+            />
+
+            {file && (
+              <div className="mt-3 rounded-xl bg-white p-3">
+                <p className="truncate text-xs text-slate-600 sm:text-sm">
+                  📎 {file.name}
+                </p>
+              </div>
+            )}
+
+            {/* AI DETAILS */}
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+              <div className="rounded-xl bg-white p-3 sm:rounded-2xl sm:p-4">
+                <p className="text-[11px] text-slate-500">
+                  Category
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-slate-800">
+                  🎒 Detecting...
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white p-3 sm:rounded-2xl sm:p-4">
+                <p className="text-[11px] text-slate-500">
+                  Color
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-slate-800">
+                  🎨 Detecting...
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white p-3 sm:rounded-2xl sm:p-4">
+                <p className="text-[11px] text-slate-500">
+                  Visible Text
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-slate-800">
+                  🔍 Scanning...
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white p-3 sm:rounded-2xl sm:p-4">
+                <p className="text-[11px] text-slate-500">
+                  Match Search
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-blue-600">
+                  🚀 Finding similar reports...
+                </p>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* ERROR */}
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-600 sm:text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* STATUS */}
+        {status && submitting && (
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-brand-600 sm:text-sm">
+            {status}
+          </div>
+        )}
+
+        {/* SUBMIT */}
         <button
-  type="submit"
-  disabled={submitting}
-  className="
-    w-full rounded-2xl
-    bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600
-    py-4 text-lg font-bold text-white
-    shadow-lg
-    transition-all
-    hover:scale-[1.02]
-    hover:shadow-xl
-    disabled:cursor-not-allowed
-    disabled:opacity-60
-  "
->
-  {submitting ? (
-    "🤖 AI is analyzing..."
-  ) : (
-    "🚀 Submit Report"
-  )}
-</button>
+          type="submit"
+          disabled={submitting}
+          className="
+            min-h-[52px]
+            w-full
+            rounded-xl
+            bg-gradient-to-r
+            from-blue-600
+            via-indigo-600
+            to-purple-600
+            px-4
+            py-3
+            text-sm
+            font-bold
+            text-white
+            shadow-lg
+            transition-all
+            hover:scale-[1.01]
+            hover:shadow-xl
+            active:scale-[0.98]
+            disabled:cursor-not-allowed
+            disabled:opacity-60
+            sm:min-h-[58px]
+            sm:rounded-2xl
+            sm:text-lg
+          "
+        >
+          {submitting
+            ? "🤖 AI is analyzing..."
+            : "🚀 Submit Report"}
+        </button>
+
       </form>
     </div>
   );

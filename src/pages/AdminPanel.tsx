@@ -2,9 +2,46 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { Profile, Item } from "../types";
+import {
+  Activity,
+  AlertCircle,
+  Archive,
+  Bot,
+  CheckCircle2,
+  Clock3,
+  FileText,
+  GraduationCap,
+  LayoutDashboard,
+  MapPin,
+  Package,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Trash2,
+  UserCheck,
+  Users,
+  XCircle,
+  Edit3,
+  Lock,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
 
 type Tab = "overview" | "users" | "items" | "matches";
 type Filter = "all" | "lost" | "found" | "closed";
+
+type MatchRecord = {
+  id: string;
+  similarity_score?: number;
+  status?: string;
+  created_at?: string;
+  lost_item?: {
+    title?: string;
+  };
+  found_item?: {
+    title?: string;
+  };
+};
 
 export default function AdminPanel() {
   const navigate = useNavigate();
@@ -13,12 +50,13 @@ export default function AdminPanel() {
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [items, setItems] = useState<Item[]>([]);
-  const [matches, setMatches] = useState<any[]>([]);
+  const [matches, setMatches] = useState<MatchRecord[]>([]);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const [stats, setStats] = useState({
@@ -38,8 +76,12 @@ export default function AdminPanel() {
     loadAll();
   }, []);
 
-  async function loadAll() {
-    setLoading(true);
+  async function loadAll(isRefresh = false) {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
     const [
       { data: profileData, error: profileError },
@@ -80,14 +122,11 @@ export default function AdminPanel() {
 
     const p = (profileData as Profile[]) ?? [];
     const it = (itemData as unknown as Item[]) ?? [];
+    const m = (matchData as MatchRecord[]) ?? [];
 
     setProfiles(p);
-
-    console.log("ADMIN PROFILES:", p);
-console.log("ADMIN PROFILE COUNT:", p.length);
-
     setItems(it);
-    setMatches(matchData ?? []);
+    setMatches(m);
 
     setStats({
       total: it.length,
@@ -99,6 +138,7 @@ console.log("ADMIN PROFILE COUNT:", p.length);
     });
 
     setLoading(false);
+    setRefreshing(false);
   }
 
   // =========================================================
@@ -128,8 +168,7 @@ console.log("ADMIN PROFILE COUNT:", p.length);
       return;
     }
 
-    await loadAll();
-
+    await loadAll(true);
     setActionLoading(null);
   }
 
@@ -163,8 +202,7 @@ console.log("ADMIN PROFILE COUNT:", p.length);
       return;
     }
 
-    await loadAll();
-
+    await loadAll(true);
     setActionLoading(null);
   }
 
@@ -174,15 +212,13 @@ console.log("ADMIN PROFILE COUNT:", p.length);
 
   async function deleteItem(itemId: string) {
     const confirmed = window.confirm(
-      "⚠️ Delete this report permanently?\n\n" +
-        "This action cannot be undone."
+      "Delete this report permanently?\n\nThis action cannot be undone."
     );
 
     if (!confirmed) return;
 
     setActionLoading(itemId);
 
-    // Delete image records
     const { error: imageError } = await supabase
       .from("item_images")
       .delete()
@@ -195,7 +231,6 @@ console.log("ADMIN PROFILE COUNT:", p.length);
       );
     }
 
-    // Delete matches where item is lost
     const { error: lostMatchError } =
       await supabase
         .from("matches")
@@ -209,7 +244,6 @@ console.log("ADMIN PROFILE COUNT:", p.length);
       );
     }
 
-    // Delete matches where item is found
     const { error: foundMatchError } =
       await supabase
         .from("matches")
@@ -223,7 +257,6 @@ console.log("ADMIN PROFILE COUNT:", p.length);
       );
     }
 
-    // Finally delete item
     const { error } = await supabase
       .from("items")
       .delete()
@@ -240,8 +273,7 @@ console.log("ADMIN PROFILE COUNT:", p.length);
       return;
     }
 
-    await loadAll();
-
+    await loadAll(true);
     setActionLoading(null);
   }
 
@@ -257,39 +289,34 @@ console.log("ADMIN PROFILE COUNT:", p.length);
   // FILTER REPORTS
   // =========================================================
 
-  const filteredItems = items.filter(
-    (item) => {
-      const matchesFilter =
-        filter === "all"
-          ? true
-          : filter === "closed"
-          ? item.status === "closed"
-          : item.type === filter;
+  const filteredItems = items.filter((item) => {
+    const matchesFilter =
+      filter === "all"
+        ? true
+        : filter === "closed"
+        ? item.status === "closed"
+        : item.type === filter;
 
-      const searchableText = (
-        item.title +
-        " " +
-        item.description +
-        " " +
-        (item.category ?? "") +
-        " " +
-        (item.location ?? "") +
-        " " +
-        (item.profiles?.full_name ?? "")
-      ).toLowerCase();
+    const searchableText = (
+      item.title +
+      " " +
+      item.description +
+      " " +
+      (item.category ?? "") +
+      " " +
+      (item.location ?? "") +
+      " " +
+      (item.profiles?.full_name ?? "")
+    ).toLowerCase();
 
-      const matchesSearch = search.trim()
-        ? searchableText.includes(
-            search.toLowerCase()
-          )
-        : true;
+    const matchesSearch = search.trim()
+      ? searchableText.includes(
+          search.toLowerCase()
+        )
+      : true;
 
-      return (
-        matchesFilter &&
-        matchesSearch
-      );
-    }
-  );
+    return matchesFilter && matchesSearch;
+  });
 
   // =========================================================
   // STAT CARDS
@@ -299,38 +326,77 @@ console.log("ADMIN PROFILE COUNT:", p.length);
     {
       label: "Total Reports",
       value: stats.total,
-      icon: "📋",
       description: "All campus reports",
+      icon: FileText,
+      iconClass:
+        "bg-blue-50 text-blue-600",
     },
     {
       label: "Lost Items",
       value: stats.lost,
-      icon: "🔍",
       description: "Items reported lost",
+      icon: AlertCircle,
+      iconClass:
+        "bg-red-50 text-red-600",
     },
     {
       label: "Found Items",
       value: stats.found,
-      icon: "🎒",
       description: "Items reported found",
+      icon: Package,
+      iconClass:
+        "bg-emerald-50 text-emerald-600",
     },
     {
       label: "Claimed",
       value: stats.claimed,
-      icon: "✅",
       description: "Successfully claimed",
+      icon: CheckCircle2,
+      iconClass:
+        "bg-violet-50 text-violet-600",
     },
     {
       label: "Users",
       value: stats.users,
-      icon: "👥",
       description: "Registered users",
+      icon: Users,
+      iconClass:
+        "bg-indigo-50 text-indigo-600",
     },
     {
       label: "Pending",
       value: stats.pending,
-      icon: "⏳",
       description: "Awaiting verification",
+      icon: Clock3,
+      iconClass:
+        "bg-amber-50 text-amber-600",
+    },
+  ];
+
+  // =========================================================
+  // TABS
+  // =========================================================
+
+  const tabs = [
+    {
+      value: "overview" as Tab,
+      label: "Overview",
+      icon: LayoutDashboard,
+    },
+    {
+      value: "users" as Tab,
+      label: "Users",
+      icon: Users,
+    },
+    {
+      value: "items" as Tab,
+      label: "Reports",
+      icon: FileText,
+    },
+    {
+      value: "matches" as Tab,
+      label: "AI Matches",
+      icon: Bot,
     },
   ];
 
@@ -339,715 +405,607 @@ console.log("ADMIN PROFILE COUNT:", p.length);
   // =========================================================
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="min-h-screen bg-slate-50">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
 
-      {/* =====================================================
-          HEADER
-      ===================================================== */}
+        {/* =====================================================
+            HEADER
+        ====================================================== */}
 
-      <div className="mb-8 overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-blue-950 to-indigo-950 p-7 text-white shadow-2xl md:p-9">
+        <section className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 p-6 text-white shadow-2xl sm:p-8">
 
-        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
 
-          <div>
+          <div className="absolute -bottom-20 left-1/3 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl" />
 
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold">
-              🛡️ ADMIN CONTROL CENTER
-            </div>
-
-            <h1 className="text-3xl font-bold md:text-4xl">
-              Vaagdevi Lost & Found
-            </h1>
-
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
-              Manage campus reports, users, AI matches
-              and moderation from one place.
-            </p>
-
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/10 px-5 py-4 backdrop-blur-xl">
-
-            <p className="text-xs uppercase tracking-wider text-white/40">
-              System Status
-            </p>
-
-            <div className="mt-2 flex items-center gap-2">
-
-              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400" />
-
-              <span className="text-sm font-semibold">
-                Platform Online
-              </span>
-
-            </div>
-
-          </div>
-
-        </div>
-      </div>
-
-      {/* =====================================================
-          TABS
-      ===================================================== */}
-
-      <div className="mb-7 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-
-        {[
-          ["overview", "📊 Overview"],
-          ["users", "👥 Users"],
-          ["items", "📋 Reports"],
-          ["matches", "🤖 AI Matches"],
-        ].map(([value, label]) => (
-
-          <button
-            key={value}
-            onClick={() =>
-              setTab(value as Tab)
-            }
-            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
-              tab === value
-                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
-                : "text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            {label}
-          </button>
-
-        ))}
-
-      </div>
-
-      {/* =====================================================
-          LOADING
-      ===================================================== */}
-
-      {loading ? (
-
-        <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
-
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
-
-          <p className="text-sm font-medium text-slate-500">
-            Loading admin data...
-          </p>
-
-        </div>
-
-      ) : (
-
-        <>
-          {/* =================================================
-              OVERVIEW
-          ================================================= */}
-
-          {tab === "overview" && (
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
 
             <div>
 
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-
-                {statCards.map((stat) => (
-
-                  <div
-                    key={stat.label}
-                    className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
-                  >
-
-                    <div className="mb-4 flex items-center justify-between">
-
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-50 text-xl transition-transform duration-300 group-hover:scale-110">
-                        {stat.icon}
-                      </div>
-
-                    </div>
-
-                    <p className="text-2xl font-bold text-slate-900">
-                      {stat.value}
-                    </p>
-
-                    <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {stat.label}
-                    </p>
-
-                    <p className="mt-1 text-xs text-slate-400">
-                      {stat.description}
-                    </p>
-
-                  </div>
-
-                ))}
-
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold backdrop-blur-xl">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                ADMIN CONTROL CENTER
               </div>
 
-              {/* ACTIVITY */}
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                Vaagdevi Lost & Found
+              </h1>
 
-              <div className="mt-7 grid gap-5 md:grid-cols-2">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
+                Manage campus reports, users, verification,
+                moderation and AI-powered matching from one
+                centralized dashboard.
+              </p>
 
-                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mt-5 flex flex-wrap items-center gap-3">
 
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">
-                    Reports
-                  </p>
-
-                  <h2 className="mt-2 text-xl font-bold text-slate-900">
-                    Campus activity
-                  </h2>
-
-                  <div className="mt-5 space-y-4">
-
-                    {/* LOST */}
-
-                    <div>
-
-                      <div className="mb-2 flex justify-between text-sm">
-
-                        <span className="text-slate-500">
-                          Lost
-                        </span>
-
-                        <span className="font-semibold">
-                          {stats.lost}
-                        </span>
-
-                      </div>
-
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-
-                        <div
-                          className="h-full rounded-full bg-blue-600 transition-all"
-                          style={{
-                            width: `${
-                              stats.total
-                                ? (stats.lost /
-                                    stats.total) *
-                                  100
-                                : 0
-                            }%`,
-                          }}
-                        />
-
-                      </div>
-
-                    </div>
-
-                    {/* FOUND */}
-
-                    <div>
-
-                      <div className="mb-2 flex justify-between text-sm">
-
-                        <span className="text-slate-500">
-                          Found
-                        </span>
-
-                        <span className="font-semibold">
-                          {stats.found}
-                        </span>
-
-                      </div>
-
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-
-                        <div
-                          className="h-full rounded-full bg-indigo-600 transition-all"
-                          style={{
-                            width: `${
-                              stats.total
-                                ? (stats.found /
-                                    stats.total) *
-                                  100
-                                : 0
-                            }%`,
-                          }}
-                        />
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+                  Platform Online
                 </div>
 
-                {/* ADMINISTRATION */}
-
-                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-600">
-                    Administration
-                  </p>
-
-                  <h2 className="mt-2 text-xl font-bold text-slate-900">
-                    Pending actions
-                  </h2>
-
-                  <div className="mt-5 flex items-center justify-between rounded-2xl bg-amber-50 p-4">
-
-                    <div>
-
-                      <p className="font-semibold text-slate-900">
-                        User verification
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-500">
-                        Users waiting for approval
-                      </p>
-
-                    </div>
-
-                    <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-700">
-                      {stats.pending}
-                    </span>
-
-                  </div>
-
-                  <button
-                    onClick={() =>
-                      setTab("users")
-                    }
-                    className="mt-4 w-full rounded-xl bg-slate-900 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                  >
-                    Manage Users →
-                  </button>
-
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/60">
+                  <Activity className="h-3.5 w-3.5" />
+                  {stats.total} reports tracked
                 </div>
 
               </div>
 
             </div>
-          )}
 
-          {/* =================================================
-              USERS
-          ================================================= */}
+            <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
 
-          {tab === "users" && (
+              <button
+                type="button"
+                onClick={() => loadAll(true)}
+                disabled={refreshing}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-xl transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${
+                    refreshing
+                      ? "animate-spin"
+                      : ""
+                  }`}
+                />
 
-            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                {refreshing
+                  ? "Refreshing..."
+                  : "Refresh Data"}
+              </button>
 
-              {/* HEADER */}
+              <div className="rounded-xl border border-white/10 bg-white/10 px-4 py-2.5 backdrop-blur-xl">
 
-              <div className="border-b border-slate-100 p-5">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-white/40">
+                  AI Engine
+                </p>
 
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="mt-1 flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-violet-300" />
 
-                  <div>
+                  <span className="text-sm font-semibold">
+                    Operational
+                  </span>
+                </div>
 
-                    <h2 className="text-xl font-bold text-slate-900">
-                      User Management
+              </div>
+
+            </div>
+
+          </div>
+        </section>
+
+        {/* =====================================================
+            TABS
+        ====================================================== */}
+
+        <div className="mb-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
+
+          <div className="flex min-w-max gap-1">
+
+            {tabs.map((item) => {
+              const Icon = item.icon;
+              const active =
+                tab === item.value;
+
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() =>
+                    setTab(item.value)
+                  }
+                  className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+                    active
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </button>
+              );
+            })}
+
+          </div>
+
+        </div>
+
+        {/* =====================================================
+            LOADING
+        ====================================================== */}
+
+        {loading ? (
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-16 text-center shadow-sm">
+
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50">
+
+              <RefreshCw className="h-6 w-6 animate-spin text-blue-600" />
+
+            </div>
+
+            <p className="text-sm font-semibold text-slate-700">
+              Loading admin dashboard
+            </p>
+
+            <p className="mt-1 text-xs text-slate-400">
+              Fetching reports, users and AI matches...
+            </p>
+
+          </div>
+
+        ) : (
+
+          <>
+            {/* =================================================
+                OVERVIEW
+            ================================================= */}
+
+            {tab === "overview" && (
+
+              <div>
+
+                {/* STATS */}
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+
+                  {statCards.map((stat) => {
+
+                    const Icon = stat.icon;
+
+                    return (
+                      <div
+                        key={stat.label}
+                        className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                      >
+
+                        <div
+                          className={`mb-4 flex h-10 w-10 items-center justify-center rounded-xl ${stat.iconClass} transition-transform duration-300 group-hover:scale-110`}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </div>
+
+                        <p className="text-2xl font-bold text-slate-900">
+                          {stat.value}
+                        </p>
+
+                        <p className="mt-1 text-xs font-bold text-slate-700 sm:text-sm">
+                          {stat.label}
+                        </p>
+
+                        <p className="mt-1 hidden text-[11px] text-slate-400 sm:block">
+                          {stat.description}
+                        </p>
+
+                      </div>
+                    );
+                  })}
+
+                </div>
+
+                {/* LOWER GRID */}
+
+                <div className="mt-6 grid gap-5 lg:grid-cols-3">
+
+                  {/* CAMPUS ACTIVITY */}
+
+                  <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+
+                    <div className="flex items-start justify-between">
+
+                      <div>
+
+                        <div className="flex items-center gap-2">
+
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                            <TrendingUp className="h-4 w-4" />
+                          </div>
+
+                          <div>
+
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
+                              Reports
+                            </p>
+
+                            <h2 className="mt-0.5 text-xl font-bold text-slate-900">
+                              Campus activity
+                            </h2>
+
+                          </div>
+
+                        </div>
+
+                      </div>
+
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                        {stats.total} total
+                      </span>
+
+                    </div>
+
+                    <div className="mt-7 space-y-6">
+
+                      {/* LOST */}
+
+                      <div>
+
+                        <div className="mb-2 flex items-center justify-between">
+
+                          <div className="flex items-center gap-2">
+
+                            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600">
+                              <AlertCircle className="h-3.5 w-3.5" />
+                            </span>
+
+                            <span className="text-sm font-semibold text-slate-700">
+                              Lost Items
+                            </span>
+
+                          </div>
+
+                          <span className="text-sm font-bold text-slate-900">
+                            {stats.lost}
+                          </span>
+
+                        </div>
+
+                        <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-red-500 to-orange-500 transition-all duration-700"
+                            style={{
+                              width: `${
+                                stats.total
+                                  ? (stats.lost /
+                                      stats.total) *
+                                    100
+                                  : 0
+                              }%`,
+                            }}
+                          />
+
+                        </div>
+
+                      </div>
+
+                      {/* FOUND */}
+
+                      <div>
+
+                        <div className="mb-2 flex items-center justify-between">
+
+                          <div className="flex items-center gap-2">
+
+                            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                              <Package className="h-3.5 w-3.5" />
+                            </span>
+
+                            <span className="text-sm font-semibold text-slate-700">
+                              Found Items
+                            </span>
+
+                          </div>
+
+                          <span className="text-sm font-bold text-slate-900">
+                            {stats.found}
+                          </span>
+
+                        </div>
+
+                        <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-700"
+                            style={{
+                              width: `${
+                                stats.total
+                                  ? (stats.found /
+                                      stats.total) *
+                                    100
+                                  : 0
+                              }%`,
+                            }}
+                          />
+
+                        </div>
+
+                      </div>
+
+                      {/* CLAIMED */}
+
+                      <div>
+
+                        <div className="mb-2 flex items-center justify-between">
+
+                          <div className="flex items-center gap-2">
+
+                            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            </span>
+
+                            <span className="text-sm font-semibold text-slate-700">
+                              Claimed
+                            </span>
+
+                          </div>
+
+                          <span className="text-sm font-bold text-slate-900">
+                            {stats.claimed}
+                          </span>
+
+                        </div>
+
+                        <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-700"
+                            style={{
+                              width: `${
+                                stats.total
+                                  ? (stats.claimed /
+                                      stats.total) *
+                                    100
+                                  : 0
+                              }%`,
+                            }}
+                          />
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  {/* ADMIN ACTIONS */}
+
+                  <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                      <ShieldCheck className="h-5 w-5" />
+                    </div>
+
+                    <p className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-amber-600">
+                      Administration
+                    </p>
+
+                    <h2 className="mt-1 text-xl font-bold text-slate-900">
+                      Pending actions
                     </h2>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      View and manage all registered
-                      Vaagdevi Lost & Found users.
+                      Items requiring administrator attention.
                     </p>
 
-                  </div>
+                    <div className="mt-5 rounded-2xl bg-amber-50 p-4">
 
-                  <div className="rounded-xl bg-blue-50 px-4 py-2">
+                      <div className="flex items-center justify-between">
 
-                    <span className="text-xs font-semibold text-blue-600">
-                      {profiles.length} Registered Users
-                    </span>
+                        <div className="flex items-center gap-3">
 
-                  </div>
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-amber-600 shadow-sm">
+                            <UserCheck className="h-4 w-4" />
+                          </div>
 
-                </div>
+                          <div>
 
-              </div>
-
-              {/* USER TABLE */}
-
-              <div className="overflow-x-auto">
-
-                <table className="w-full min-w-[1150px] text-sm">
-
-                  <thead className="bg-slate-50">
-
-                    <tr>
-
-                      <th className="px-5 py-4 text-left">
-                        User
-                      </th>
-
-                      <th className="px-5 py-4 text-left">
-                        Email
-                      </th>
-
-                      <th className="px-5 py-4 text-left">
-                        Roll No
-                      </th>
-
-                      <th className="px-5 py-4 text-left">
-                        Department
-                      </th>
-
-                      <th className="px-5 py-4 text-left">
-                        Phone
-                      </th>
-
-                      <th className="px-5 py-4 text-left">
-                        Role
-                      </th>
-
-                      <th className="px-5 py-4 text-left">
-                        Joined
-                      </th>
-
-                      <th className="px-5 py-4 text-left">
-                        Status
-                      </th>
-
-                      <th className="px-5 py-4 text-right">
-                        Action
-                      </th>
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {profiles.length === 0 ? (
-
-                      <tr>
-
-                        <td
-                          colSpan={9}
-                          className="py-12 text-center text-slate-400"
-                        >
-                          No registered users found.
-                        </td>
-
-                      </tr>
-
-                    ) : (
-
-                      profiles.map((p) => (
-
-                        <tr
-                          key={p.id}
-                          className="border-t border-slate-100 transition hover:bg-slate-50/70"
-                        >
-
-                          {/* USER */}
-
-                          <td className="px-5 py-4">
-
-                            <div className="flex items-center gap-3">
-
-                              {p.avatar_url ? (
-
-                                <img
-                                  src={p.avatar_url}
-                                  alt={p.full_name}
-                                  className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-100"
-                                />
-
-                              ) : (
-
-                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-sm font-bold text-white shadow-sm">
-
-                                  {p.full_name
-                                    ?.charAt(0)
-                                    ?.toUpperCase() ||
-                                    "U"}
-
-                                </div>
-
-                              )}
-
-                              <div className="min-w-[150px]">
-
-                                <p className="font-semibold text-slate-900">
-                                  {p.full_name ||
-                                    "Unknown User"}
-                                </p>
-
-                                <p className="text-xs text-slate-400">
-                                  ID:{" "}
-                                  {p.id.slice(
-                                    0,
-                                    8
-                                  )}
-                                  ...
-                                </p>
-
-                              </div>
-
-                            </div>
-
-                          </td>
-
-                          {/* EMAIL */}
-
-                          <td className="px-5 py-4">
-
-                            <p className="max-w-[220px] truncate text-slate-600">
-                              {p.email || "-"}
+                            <p className="text-sm font-bold text-slate-900">
+                              Verification
                             </p>
 
-                          </td>
+                            <p className="text-xs text-slate-500">
+                              Users awaiting approval
+                            </p>
 
-                          {/* ROLL NO */}
+                          </div>
 
-                          <td className="px-5 py-4">
+                        </div>
 
-                            <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                              {p.college_id || "-"}
-                            </span>
+                        <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-700">
+                          {stats.pending}
+                        </span>
 
-                          </td>
+                      </div>
 
-                          {/* DEPARTMENT */}
+                    </div>
 
-                          <td className="px-5 py-4 text-slate-600">
-                            {p.department || "-"}
-                          </td>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTab("users")
+                      }
+                      className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    >
+                      <Users className="h-4 w-4" />
+                      Manage Users
+                    </button>
 
-                          {/* PHONE */}
-
-                          <td className="px-5 py-4 text-slate-600">
-                            {p.phone || "-"}
-                          </td>
-
-                          {/* ROLE */}
-
-                          <td className="px-5 py-4">
-
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
-                                p.role === "admin"
-                                  ? "bg-purple-50 text-purple-700"
-                                  : p.role ===
-                                    "faculty"
-                                  ? "bg-indigo-50 text-indigo-700"
-                                  : "bg-blue-50 text-blue-700"
-                              }`}
-                            >
-                              {p.role}
-                            </span>
-
-                          </td>
-
-                          {/* JOINED */}
-
-                          <td className="px-5 py-4 text-slate-500">
-
-                            {p.created_at
-                              ? new Date(
-                                  p.created_at
-                                ).toLocaleDateString(
-                                  "en-IN",
-                                  {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                  }
-                                )
-                              : "-"}
-
-                          </td>
-
-                          {/* STATUS */}
-
-                          <td className="px-5 py-4">
-
-                            <span
-                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                                p.is_verified
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "bg-amber-50 text-amber-700"
-                              }`}
-                            >
-
-                              <span
-                                className={`h-1.5 w-1.5 rounded-full ${
-                                  p.is_verified
-                                    ? "bg-emerald-500"
-                                    : "bg-amber-500"
-                                }`}
-                              />
-
-                              {p.is_verified
-                                ? "Verified"
-                                : "Pending"}
-
-                            </span>
-
-                          </td>
-
-                          {/* ACTION */}
-
-                          <td className="px-5 py-4 text-right">
-
-                            <button
-                              disabled={
-                                actionLoading ===
-                                p.id
-                              }
-                              onClick={() =>
-                                toggleVerify(
-                                  p.id,
-                                  !p.is_verified
-                                )
-                              }
-                              className={`rounded-xl px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                                p.is_verified
-                                  ? "bg-red-50 text-red-600 hover:bg-red-100"
-                                  : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                              }`}
-                            >
-
-                              {actionLoading ===
-                              p.id
-                                ? "Updating..."
-                                : p.is_verified
-                                ? "Revoke"
-                                : "Verify"}
-
-                            </button>
-
-                          </td>
-
-                        </tr>
-
-                      ))
-
-                    )}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-              {/* FOOTER */}
-
-              <div className="border-t border-slate-100 bg-slate-50/50 px-5 py-4">
-
-                <p className="text-xs text-slate-400">
-                  Showing {profiles.length} registered users
-                </p>
-
-              </div>
-
-            </div>
-          )}
-
-          {/* =================================================
-              REPORTS / ITEMS
-          ================================================= */}
-
-          {tab === "items" && (
-
-            <div>
-
-              {/* SEARCH + FILTER */}
-
-              <div className="mb-5 flex flex-col gap-3 md:flex-row">
-
-                <div className="relative flex-1">
-
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                    🔍
-                  </span>
-
-                  <input
-                    type="text"
-                    placeholder="Search reports, locations, categories..."
-                    value={search}
-                    onChange={(e) =>
-                      setSearch(e.target.value)
-                    }
-                    className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                  />
+                  </div>
 
                 </div>
 
-                <select
-                  value={filter}
-                  onChange={(e) =>
-                    setFilter(
-                      e.target.value as Filter
-                    )
-                  }
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-blue-500"
-                >
+                {/* QUICK INSIGHTS */}
 
-                  <option value="all">
-                    All Reports
-                  </option>
+                <div className="mt-5 grid gap-4 sm:grid-cols-3">
 
-                  <option value="lost">
-                    Lost
-                  </option>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 
-                  <option value="found">
-                    Found
-                  </option>
+                    <div className="flex items-center gap-3">
 
-                  <option value="closed">
-                    Closed
-                  </option>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                        <GraduationCap className="h-5 w-5" />
+                      </div>
 
-                </select>
+                      <div>
+
+                        <p className="text-xs font-semibold text-slate-400">
+                          REGISTERED USERS
+                        </p>
+
+                        <p className="text-lg font-bold text-slate-900">
+                          {stats.users}
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+
+                    <div className="flex items-center gap-3">
+
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+                        <Sparkles className="h-5 w-5" />
+                      </div>
+
+                      <div>
+
+                        <p className="text-xs font-semibold text-slate-400">
+                          AI MATCHES
+                        </p>
+
+                        <p className="text-lg font-bold text-slate-900">
+                          {matches.length}
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+
+                    <div className="flex items-center gap-3">
+
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                        <Archive className="h-5 w-5" />
+                      </div>
+
+                      <div>
+
+                        <p className="text-xs font-semibold text-slate-400">
+                          CLAIMED ITEMS
+                        </p>
+
+                        <p className="text-lg font-bold text-slate-900">
+                          {stats.claimed}
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                </div>
 
               </div>
+            )}
 
-              {/* REPORT TABLE */}
+            {/* =================================================
+                USERS
+            ================================================= */}
+
+            {tab === "users" && (
 
               <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
 
-                <div className="border-b border-slate-100 p-5">
+                <div className="border-b border-slate-100 p-5 sm:p-6">
 
-                  <h2 className="text-xl font-bold text-slate-900">
-                    Report Management
-                  </h2>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
-                  <p className="mt-1 text-sm text-slate-500">
-                    Edit, close or permanently delete
-                    user reports.
-                  </p>
+                    <div>
+
+                      <div className="flex items-center gap-2">
+
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                          <Users className="h-4 w-4" />
+                        </div>
+
+                        <h2 className="text-xl font-bold text-slate-900">
+                          User Management
+                        </h2>
+
+                      </div>
+
+                      <p className="mt-2 text-sm text-slate-500">
+                        Review registered users and manage verification status.
+                      </p>
+
+                    </div>
+
+                    <div className="inline-flex w-fit items-center gap-2 rounded-xl bg-blue-50 px-4 py-2.5">
+
+                      <Users className="h-4 w-4 text-blue-600" />
+
+                      <span className="text-xs font-bold text-blue-700">
+                        {profiles.length} Registered
+                      </span>
+
+                    </div>
+
+                  </div>
 
                 </div>
 
                 <div className="overflow-x-auto">
 
-                  <table className="w-full min-w-[1000px] text-sm">
+                  <table className="w-full min-w-[1100px] text-sm">
 
                     <thead className="bg-slate-50">
 
                       <tr>
 
-                        <th className="px-5 py-4 text-left">
-                          Report
-                        </th>
+                        {[
+                          "User",
+                          "Email",
+                          "Roll No",
+                          "Department",
+                          "Phone",
+                          "Role",
+                          "Joined",
+                          "Status",
+                          "Action",
+                        ].map((heading) => (
 
-                        <th className="px-5 py-4 text-left">
-                          Type
-                        </th>
+                          <th
+                            key={heading}
+                            className={`px-5 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400 ${
+                              heading ===
+                              "Action"
+                                ? "text-right"
+                                : ""
+                            }`}
+                          >
+                            {heading}
+                          </th>
 
-                        <th className="px-5 py-4 text-left">
-                          Reporter
-                        </th>
-
-                        <th className="px-5 py-4 text-left">
-                          Location
-                        </th>
-
-                        <th className="px-5 py-4 text-left">
-                          Date
-                        </th>
-
-                        <th className="px-5 py-4 text-left">
-                          Status
-                        </th>
-
-                        <th className="px-5 py-4 text-right">
-                          Actions
-                        </th>
+                        ))}
 
                       </tr>
 
@@ -1055,195 +1013,217 @@ console.log("ADMIN PROFILE COUNT:", p.length);
 
                     <tbody>
 
-                      {filteredItems.length ===
-                      0 ? (
+                      {profiles.length === 0 ? (
 
                         <tr>
 
                           <td
-                            colSpan={7}
-                            className="py-12 text-center text-slate-400"
+                            colSpan={9}
+                            className="py-16 text-center"
                           >
-                            No reports found.
+
+                            <Users className="mx-auto h-8 w-8 text-slate-300" />
+
+                            <p className="mt-3 text-sm font-semibold text-slate-500">
+                              No registered users found
+                            </p>
+
                           </td>
 
                         </tr>
 
                       ) : (
 
-                        filteredItems.map(
-                          (item) => (
+                        profiles.map((p) => (
 
-                            <tr
-                              key={item.id}
-                              className="border-t border-slate-100 hover:bg-slate-50/70"
-                            >
+                          <tr
+                            key={p.id}
+                            className="border-t border-slate-100 transition hover:bg-slate-50/70"
+                          >
 
-                              {/* REPORT */}
+                            <td className="px-5 py-4">
 
-                              <td className="px-5 py-4">
+                              <div className="flex items-center gap-3">
 
-                                <div className="max-w-[230px]">
+                                {p.avatar_url ? (
 
-                                  <p className="truncate font-semibold text-slate-900">
-                                    {item.title}
-                                  </p>
+                                  <img
+                                    src={p.avatar_url}
+                                    alt={p.full_name}
+                                    className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-100"
+                                  />
 
-                                  <p className="mt-1 truncate text-xs text-slate-400">
-                                    {item.category ||
-                                      "Uncategorized"}
+                                ) : (
+
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-bold text-white">
+                                    {p.full_name
+                                      ?.charAt(
+                                        0
+                                      )
+                                      ?.toUpperCase() ||
+                                      "U"}
+                                  </div>
+
+                                )}
+
+                                <div>
+
+                                  <div className="flex items-center gap-1.5">
+
+                                    <p className="font-semibold text-slate-900">
+                                      {p.full_name ||
+                                        "Unknown User"}
+                                    </p>
+
+                                    {p.is_verified && (
+                                      <CheckCircle2 className="h-3.5 w-3.5 fill-emerald-500 text-emerald-500" />
+                                    )}
+
+                                  </div>
+
+                                  <p className="mt-0.5 text-[11px] text-slate-400">
+                                    ID:{" "}
+                                    {p.id.slice(
+                                      0,
+                                      8
+                                    )}
+                                    ...
                                   </p>
 
                                 </div>
 
-                              </td>
+                              </div>
 
-                              {/* TYPE */}
+                            </td>
 
-                              <td className="px-5 py-4">
+                            <td className="px-5 py-4">
 
-                                <span
-                                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                                    item.type ===
-                                    "lost"
-                                      ? "bg-red-50 text-red-600"
-                                      : "bg-emerald-50 text-emerald-600"
-                                  }`}
-                                >
+                              <span className="block max-w-[220px] truncate text-slate-600">
+                                {p.email || "-"}
+                              </span>
 
-                                  {item.type ===
-                                  "lost"
-                                    ? "🔍 Lost"
-                                    : "🎒 Found"}
+                            </td>
 
-                                </span>
+                            <td className="px-5 py-4">
 
-                              </td>
+                              <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                                {p.college_id ||
+                                  "-"}
+                              </span>
 
-                              {/* REPORTER */}
+                            </td>
 
-                              <td className="px-5 py-4">
+                            <td className="px-5 py-4 text-slate-600">
+                              {p.department || "-"}
+                            </td>
 
-                                <p className="font-medium text-slate-700">
-                                  {item.profiles
-                                    ?.full_name ||
-                                    "-"}
-                                </p>
+                            <td className="px-5 py-4 text-slate-600">
+                              {p.phone || "-"}
+                            </td>
 
-                                <p className="text-xs text-slate-400">
-                                  {item.profiles
-                                    ?.department ||
-                                    ""}
-                                </p>
+                            <td className="px-5 py-4">
 
-                              </td>
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                                  p.role ===
+                                  "admin"
+                                    ? "bg-purple-50 text-purple-700"
+                                    : p.role ===
+                                      "faculty"
+                                    ? "bg-indigo-50 text-indigo-700"
+                                    : "bg-blue-50 text-blue-700"
+                                }`}
+                              >
+                                {p.role}
+                              </span>
 
-                              {/* LOCATION */}
+                            </td>
 
-                              <td className="px-5 py-4 text-slate-500">
-                                📍 {item.location}
-                              </td>
+                            <td className="px-5 py-4 text-slate-500">
 
-                              {/* DATE */}
-
-                              <td className="px-5 py-4 text-slate-500">
-
-                                {item.date_occurred
-                                  ? new Date(
-                                      item.date_occurred
-                                    ).toLocaleDateString(
-                                      "en-IN"
-                                    )
-                                  : "-"}
-
-                              </td>
-
-                              {/* STATUS */}
-
-                              <td className="px-5 py-4">
-
-                                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold capitalize text-slate-600">
-                                  {item.status}
-                                </span>
-
-                              </td>
-
-                              {/* ACTIONS */}
-
-                              <td className="px-5 py-4">
-
-                                <div className="flex justify-end gap-2">
-
-                                  {/* EDIT */}
-
-                                  <button
-                                    onClick={() =>
-                                      editItem(
-                                        item.id
-                                      )
+                              {p.created_at
+                                ? new Date(
+                                    p.created_at
+                                  ).toLocaleDateString(
+                                    "en-IN",
+                                    {
+                                      day: "2-digit",
+                                      month: "short",
+                                      year: "numeric",
                                     }
-                                    className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-100"
-                                  >
-                                    ✏️ Edit
-                                  </button>
+                                  )
+                                : "-"}
 
-                                  {/* CLOSE */}
+                            </td>
 
-                                  {item.status !==
-                                    "closed" && (
+                            <td className="px-5 py-4">
 
-                                    <button
-                                      disabled={
-                                        actionLoading ===
-                                        item.id
-                                      }
-                                      onClick={() =>
-                                        closeItem(
-                                          item.id
-                                        )
-                                      }
-                                      className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
-                                    >
+                              <span
+                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+                                  p.is_verified
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-amber-50 text-amber-700"
+                                }`}
+                              >
 
-                                      {actionLoading ===
-                                      item.id
-                                        ? "..."
-                                        : "🔒 Close"}
+                                {p.is_verified ? (
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Clock3 className="h-3.5 w-3.5" />
+                                )}
 
-                                    </button>
+                                {p.is_verified
+                                  ? "Verified"
+                                  : "Pending"}
 
-                                  )}
+                              </span>
 
-                                  {/* DELETE */}
+                            </td>
 
-                                  <button
-                                    disabled={
-                                      actionLoading ===
-                                      item.id
-                                    }
-                                    onClick={() =>
-                                      deleteItem(
-                                        item.id
-                                      )
-                                    }
-                                    className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
-                                  >
+                            <td className="px-5 py-4 text-right">
 
-                                    {actionLoading ===
-                                    item.id
-                                      ? "..."
-                                      : "🗑️ Delete"}
+                              <button
+                                type="button"
+                                disabled={
+                                  actionLoading ===
+                                  p.id
+                                }
+                                onClick={() =>
+                                  toggleVerify(
+                                    p.id,
+                                    !p.is_verified
+                                  )
+                                }
+                                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                  p.is_verified
+                                    ? "bg-red-50 text-red-600 hover:bg-red-100"
+                                    : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                                }`}
+                              >
 
-                                  </button>
+                                {actionLoading ===
+                                p.id ? (
+                                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                ) : p.is_verified ? (
+                                  <XCircle className="h-3.5 w-3.5" />
+                                ) : (
+                                  <UserCheck className="h-3.5 w-3.5" />
+                                )}
 
-                                </div>
+                                {actionLoading ===
+                                p.id
+                                  ? "Updating"
+                                  : p.is_verified
+                                  ? "Revoke"
+                                  : "Verify"}
 
-                              </td>
+                              </button>
 
-                            </tr>
+                            </td>
 
-                          )
-                        )
+                          </tr>
+
+                        ))
 
                       )}
 
@@ -1253,184 +1233,698 @@ console.log("ADMIN PROFILE COUNT:", p.length);
 
                 </div>
 
-                <div className="border-t border-slate-100 px-5 py-4">
+                <div className="border-t border-slate-100 bg-slate-50/50 px-5 py-4">
 
                   <p className="text-xs text-slate-400">
-                    Showing{" "}
-                    {filteredItems.length}{" "}
-                    of {items.length} reports
+                    Showing {profiles.length} registered users
                   </p>
 
                 </div>
 
               </div>
+            )}
 
-            </div>
-          )}
+            {/* =================================================
+                REPORTS
+            ================================================= */}
 
-          {/* =================================================
-              AI MATCHES
-          ================================================= */}
+            {tab === "items" && (
 
-          {tab === "matches" && (
+              <div>
 
-            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <div className="mb-5 flex flex-col gap-3 md:flex-row">
 
-              <div className="border-b border-slate-100 p-5">
+                  <div className="relative flex-1">
 
-                <div className="flex items-center justify-between">
+                    <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
-                  <div>
-
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-600">
-                      AI Engine
-                    </p>
-
-                    <h2 className="mt-1 text-xl font-bold text-slate-900">
-                      AI Match Management
-                    </h2>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      Review automatically detected
-                      lost and found matches.
-                    </p>
+                    <input
+                      type="text"
+                      placeholder="Search reports, locations, categories..."
+                      value={search}
+                      onChange={(e) =>
+                        setSearch(e.target.value)
+                      }
+                      className="w-full rounded-2xl border border-slate-200 bg-white py-3.5 pl-11 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                    />
 
                   </div>
 
-                  <div className="hidden rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-600 sm:block">
-                    ● AI Online
-                  </div>
+                  <select
+                    value={filter}
+                    onChange={(e) =>
+                      setFilter(
+                        e.target.value as Filter
+                      )
+                    }
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                  >
+
+                    <option value="all">
+                      All Reports
+                    </option>
+
+                    <option value="lost">
+                      Lost
+                    </option>
+
+                    <option value="found">
+                      Found
+                    </option>
+
+                    <option value="closed">
+                      Closed
+                    </option>
+
+                  </select>
 
                 </div>
 
-              </div>
+                <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
 
-              <div className="overflow-x-auto">
+                  <div className="border-b border-slate-100 p-5 sm:p-6">
 
-                <table className="w-full min-w-[800px] text-sm">
+                    <div className="flex items-center gap-3">
 
-                  <thead className="bg-slate-50">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                        <FileText className="h-5 w-5" />
+                      </div>
 
-                    <tr>
+                      <div>
 
-                      <th className="px-5 py-4 text-left">
-                        Lost Item
-                      </th>
+                        <h2 className="text-xl font-bold text-slate-900">
+                          Report Management
+                        </h2>
 
-                      <th className="px-5 py-4 text-left">
-                        Found Item
-                      </th>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Edit, close or permanently delete campus reports.
+                        </p>
 
-                      <th className="px-5 py-4 text-left">
-                        Confidence
-                      </th>
+                      </div>
 
-                      <th className="px-5 py-4 text-left">
-                        Status
-                      </th>
+                    </div>
 
-                    </tr>
+                  </div>
 
-                  </thead>
+                  <div className="overflow-x-auto">
 
-                  <tbody>
+                    <table className="w-full min-w-[1050px] text-sm">
 
-                    {matches.length === 0 ? (
+                      <thead className="bg-slate-50">
 
-                      <tr>
+                        <tr>
 
-                        <td
-                          colSpan={4}
-                          className="py-12 text-center text-slate-400"
-                        >
-                          No AI matches found.
-                        </td>
+                          {[
+                            "Report",
+                            "Type",
+                            "Reporter",
+                            "Location",
+                            "Date",
+                            "Status",
+                            "Actions",
+                          ].map((heading) => (
 
-                      </tr>
+                            <th
+                              key={heading}
+                              className={`px-5 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400 ${
+                                heading ===
+                                "Actions"
+                                  ? "text-right"
+                                  : ""
+                              }`}
+                            >
+                              {heading}
+                            </th>
 
-                    ) : (
+                          ))}
 
-                      matches.map((match) => {
+                        </tr>
 
-                        const confidence =
-                          Math.round(
-                            (match.similarity_score ??
-                              0) * 100
-                          );
+                      </thead>
 
-                        return (
+                      <tbody>
 
-                          <tr
-                            key={match.id}
-                            className="border-t border-slate-100"
-                          >
+                        {filteredItems.length ===
+                        0 ? (
 
-                            <td className="px-5 py-4 font-medium text-slate-800">
-                              🔍{" "}
-                              {match.lost_item
-                                ?.title ?? "-"}
-                            </td>
+                          <tr>
 
-                            <td className="px-5 py-4 font-medium text-slate-800">
-                              🎒{" "}
-                              {match.found_item
-                                ?.title ?? "-"}
-                            </td>
+                            <td
+                              colSpan={7}
+                              className="py-16 text-center"
+                            >
 
-                            <td className="px-5 py-4">
+                              <FileText className="mx-auto h-8 w-8 text-slate-300" />
 
-                              <div className="flex items-center gap-3">
+                              <p className="mt-3 text-sm font-semibold text-slate-500">
+                                No reports found
+                              </p>
 
-                                <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-100">
-
-                                  <div
-                                    className="h-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600"
-                                    style={{
-                                      width: `${Math.min(
-                                        confidence,
-                                        100
-                                      )}%`,
-                                    }}
-                                  />
-
-                                </div>
-
-                                <span className="font-bold text-blue-600">
-                                  {confidence}%
-                                </span>
-
-                              </div>
-
-                            </td>
-
-                            <td className="px-5 py-4">
-
-                              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold capitalize text-slate-600">
-                                {match.status ||
-                                  "suggested"}
-                              </span>
+                              <p className="mt-1 text-xs text-slate-400">
+                                Try changing your search or filter.
+                              </p>
 
                             </td>
 
                           </tr>
 
-                        );
+                        ) : (
 
-                      })
+                          filteredItems.map(
+                            (item) => (
 
-                    )}
+                              <tr
+                                key={item.id}
+                                className="border-t border-slate-100 transition hover:bg-slate-50/70"
+                              >
 
-                  </tbody>
+                                <td className="px-5 py-4">
 
-                </table>
+                                  <div className="max-w-[230px]">
+
+                                    <p className="truncate font-semibold text-slate-900">
+                                      {item.title}
+                                    </p>
+
+                                    <p className="mt-1 truncate text-xs text-slate-400">
+                                      {item.category ||
+                                        "Uncategorized"}
+                                    </p>
+
+                                  </div>
+
+                                </td>
+
+                                <td className="px-5 py-4">
+
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
+                                      item.type ===
+                                      "lost"
+                                        ? "bg-red-50 text-red-600"
+                                        : "bg-emerald-50 text-emerald-600"
+                                    }`}
+                                  >
+
+                                    {item.type ===
+                                    "lost" ? (
+                                      <AlertCircle className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <Package className="h-3.5 w-3.5" />
+                                    )}
+
+                                    {item.type ===
+                                    "lost"
+                                      ? "Lost"
+                                      : "Found"}
+
+                                  </span>
+
+                                </td>
+
+                                <td className="px-5 py-4">
+
+                                  <p className="font-medium text-slate-700">
+                                    {item.profiles
+                                      ?.full_name ||
+                                      "-"}
+                                  </p>
+
+                                  <p className="text-xs text-slate-400">
+                                    {item.profiles
+                                      ?.department ||
+                                      ""}
+                                  </p>
+
+                                </td>
+
+                                <td className="px-5 py-4">
+
+                                  <div className="flex max-w-[180px] items-center gap-1.5 text-slate-500">
+
+                                    <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+
+                                    <span className="truncate">
+                                      {item.location ||
+                                        "Unknown"}
+                                    </span>
+
+                                  </div>
+
+                                </td>
+
+                                <td className="px-5 py-4 text-slate-500">
+
+                                  {item.date_occurred
+                                    ? new Date(
+                                        item.date_occurred
+                                      ).toLocaleDateString(
+                                        "en-IN"
+                                      )
+                                    : "-"}
+
+                                </td>
+
+                                <td className="px-5 py-4">
+
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                                      item.status ===
+                                      "closed"
+                                        ? "bg-slate-100 text-slate-600"
+                                        : item.status ===
+                                          "claimed"
+                                        ? "bg-emerald-50 text-emerald-700"
+                                        : "bg-blue-50 text-blue-700"
+                                    }`}
+                                  >
+
+                                    {item.status ===
+                                    "closed" ? (
+                                      <Lock className="h-3 w-3" />
+                                    ) : (
+                                      <Activity className="h-3 w-3" />
+                                    )}
+
+                                    {item.status ||
+                                      "active"}
+
+                                  </span>
+
+                                </td>
+
+                                <td className="px-5 py-4">
+
+                                  <div className="flex justify-end gap-2">
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        editItem(
+                                          item.id
+                                        )
+                                      }
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-100"
+                                    >
+                                      <Edit3 className="h-3.5 w-3.5" />
+                                      Edit
+                                    </button>
+
+                                    {item.status !==
+                                      "closed" && (
+
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          actionLoading ===
+                                          item.id
+                                        }
+                                        onClick={() =>
+                                          closeItem(
+                                            item.id
+                                          )
+                                        }
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                                      >
+
+                                        {actionLoading ===
+                                        item.id ? (
+                                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                        ) : (
+                                          <Lock className="h-3.5 w-3.5" />
+                                        )}
+
+                                        Close
+                                      </button>
+
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        actionLoading ===
+                                        item.id
+                                      }
+                                      onClick={() =>
+                                        deleteItem(
+                                          item.id
+                                        )
+                                      }
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                                    >
+
+                                      {actionLoading ===
+                                      item.id ? (
+                                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      )}
+
+                                      Delete
+                                    </button>
+
+                                  </div>
+
+                                </td>
+
+                              </tr>
+
+                            )
+                          )
+
+                        )}
+
+                      </tbody>
+
+                    </table>
+
+                  </div>
+
+                  <div className="border-t border-slate-100 bg-slate-50/50 px-5 py-4">
+
+                    <p className="text-xs text-slate-400">
+                      Showing {filteredItems.length} of{" "}
+                      {items.length} reports
+                    </p>
+
+                  </div>
+
+                </div>
 
               </div>
+            )}
 
-            </div>
-          )}
-        </>
-      )}
+            {/* =================================================
+                AI MATCHES
+            ================================================= */}
 
+            {tab === "matches" && (
+
+              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+
+                <div className="border-b border-slate-100 p-5 sm:p-6">
+
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+                    <div>
+
+                      <div className="flex items-center gap-3">
+
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+                          <Bot className="h-5 w-5" />
+                        </div>
+
+                        <div>
+
+                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">
+                            AI Engine
+                          </p>
+
+                          <h2 className="mt-0.5 text-xl font-bold text-slate-900">
+                            AI Match Management
+                          </h2>
+
+                        </div>
+
+                      </div>
+
+                      <p className="mt-2 text-sm text-slate-500">
+                        Review automatically detected lost and found item matches.
+                      </p>
+
+                    </div>
+
+                    <div className="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+
+                      AI Online
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+                <div className="grid gap-4 border-b border-slate-100 bg-slate-50/50 p-5 sm:grid-cols-3">
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+
+                    <div className="flex items-center gap-3">
+
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+                        <Bot className="h-4 w-4" />
+                      </div>
+
+                      <div>
+
+                        <p className="text-xs text-slate-400">
+                          TOTAL MATCHES
+                        </p>
+
+                        <p className="text-xl font-bold text-slate-900">
+                          {matches.length}
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+
+                    <div className="flex items-center gap-3">
+
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                        <CheckCircle2 className="h-4 w-4" />
+                      </div>
+
+                      <div>
+
+                        <p className="text-xs text-slate-400">
+                          HIGH CONFIDENCE
+                        </p>
+
+                        <p className="text-xl font-bold text-slate-900">
+                          {
+                            matches.filter(
+                              (m) =>
+                                (m.similarity_score ??
+                                  0) >=
+                                0.75
+                            ).length
+                          }
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+
+                    <div className="flex items-center gap-3">
+
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                        <Sparkles className="h-4 w-4" />
+                      </div>
+
+                      <div>
+
+                        <p className="text-xs text-slate-400">
+                          ENGINE STATUS
+                        </p>
+
+                        <p className="text-xl font-bold text-emerald-600">
+                          Online
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+                <div className="overflow-x-auto">
+
+                  <table className="w-full min-w-[850px] text-sm">
+
+                    <thead className="bg-slate-50">
+
+                      <tr>
+
+                        <th className="px-5 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          Lost Item
+                        </th>
+
+                        <th className="px-5 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          Found Item
+                        </th>
+
+                        <th className="px-5 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          Confidence
+                        </th>
+
+                        <th className="px-5 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          Status
+                        </th>
+
+                      </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                      {matches.length === 0 ? (
+
+                        <tr>
+
+                          <td
+                            colSpan={4}
+                            className="py-16 text-center"
+                          >
+
+                            <Bot className="mx-auto h-9 w-9 text-slate-300" />
+
+                            <p className="mt-3 text-sm font-semibold text-slate-500">
+                              No AI matches found
+                            </p>
+
+                            <p className="mt-1 text-xs text-slate-400">
+                              Matches will appear here when the AI engine detects candidates.
+                            </p>
+
+                          </td>
+
+                        </tr>
+
+                      ) : (
+
+                        matches.map((match) => {
+
+                          const confidence =
+                            Math.round(
+                              (match.similarity_score ??
+                                0) * 100
+                            );
+
+                          const confidenceClass =
+                            confidence >= 75
+                              ? "text-emerald-600"
+                              : confidence >= 55
+                              ? "text-amber-600"
+                              : "text-slate-500";
+
+                          return (
+
+                            <tr
+                              key={match.id}
+                              className="border-t border-slate-100 transition hover:bg-slate-50/70"
+                            >
+
+                              <td className="px-5 py-4">
+
+                                <div className="flex items-center gap-3">
+
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                                    <AlertCircle className="h-4 w-4" />
+                                  </div>
+
+                                  <p className="font-semibold text-slate-800">
+                                    {match.lost_item
+                                      ?.title ??
+                                      "-"}
+                                  </p>
+
+                                </div>
+
+                              </td>
+
+                              <td className="px-5 py-4">
+
+                                <div className="flex items-center gap-3">
+
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                                    <Package className="h-4 w-4" />
+                                  </div>
+
+                                  <p className="font-semibold text-slate-800">
+                                    {match.found_item
+                                      ?.title ??
+                                      "-"}
+                                  </p>
+
+                                </div>
+
+                              </td>
+
+                              <td className="px-5 py-4">
+
+                                <div className="flex items-center gap-3">
+
+                                  <div className="h-2 w-24 overflow-hidden rounded-full bg-slate-100">
+
+                                    <div
+                                      className="h-full rounded-full bg-gradient-to-r from-blue-600 to-violet-600 transition-all"
+                                      style={{
+                                        width: `${Math.min(
+                                          confidence,
+                                          100
+                                        )}%`,
+                                      }}
+                                    />
+
+                                  </div>
+
+                                  <span
+                                    className={`font-bold ${confidenceClass}`}
+                                  >
+                                    {confidence}%
+                                  </span>
+
+                                </div>
+
+                              </td>
+
+                              <td className="px-5 py-4">
+
+                                <span
+                                  className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                                    match.status ===
+                                    "confirmed"
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : "bg-slate-100 text-slate-600"
+                                  }`}
+                                >
+                                  {match.status ||
+                                    "suggested"}
+                                </span>
+
+                              </td>
+
+                            </tr>
+
+                          );
+                        })
+
+                      )}
+
+                    </tbody>
+
+                  </table>
+
+                </div>
+
+              </div>
+            )}
+          </>
+        )}
+
+      </div>
     </div>
   );
 }

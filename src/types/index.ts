@@ -1,7 +1,23 @@
 export type UserRole = "student" | "faculty" | "admin";
+
 export type ItemType = "lost" | "found";
-export type ItemStatus = "open" | "matched" | "claimed" | "closed";
-export type MatchStatus = "suggested" | "confirmed" | "rejected";
+
+export type ItemStatus =
+  "open"
+  | "matched"
+  | "claimed"
+  | "closed";
+
+export type MatchStatus =
+  "suggested"
+  | "confirmed"
+  | "rejected"
+  | "completed";
+
+export type NotificationType =
+  "match_found"
+  | "message"
+  | "status_change";
 
 export interface Profile {
   id: string;
@@ -39,8 +55,16 @@ export interface Item {
   status: ItemStatus;
   ai_labels: AiLabels | null;
   created_at: string;
-  item_images?: { id: string; storage_path: string }[];
-  profiles?: Pick<Profile, "full_name" | "department">;
+
+  item_images?: {
+    id: string;
+    storage_path: string;
+  }[];
+
+  profiles?: Pick<
+    Profile,
+    "full_name" | "department"
+  >;
 }
 
 export interface Message {
@@ -55,43 +79,36 @@ export interface Message {
 export interface Notification {
   id: string;
   user_id: string;
-  type: "match_found" | "message" | "status_change";
+  type: NotificationType;
   title: string;
   body: string | null;
   link_item_id: string | null;
   is_read: boolean;
   created_at: string;
 }
+
+export interface MatchItem {
+  id: string;
+  reporter_id: string;
+  title: string;
+  type: ItemType;
+  location: string;
+  date_occurred: string;
+  status: ItemStatus;
+
+  item_images?: {
+    storage_path: string;
+  }[];
+}
+
 export interface Match {
   id: string;
   lost_item_id: string;
   found_item_id: string;
   similarity_score: number;
-  status: string;
+  status: MatchStatus;
 
-  lost_item?: {
-    id: string;
-    reporter_id: string;
-    title: string;
-    type: ItemType;
-    location: string;
-    date_occurred: string;
-    status: ItemStatus;
-    item_images?: {
-      storage_path: string;
-    }[];
-  };
+  lost_item?: MatchItem;
 
-  found_item?: {
-    id: string;
-    reporter_id: string;
-    title: string;
-    type: ItemType;
-    location: string;
-    date_occurred: string;
-    status: ItemStatus;
-    item_images?: {
-      storage_path: string;
-    }[];
-  };
+  found_item?: MatchItem;
 }

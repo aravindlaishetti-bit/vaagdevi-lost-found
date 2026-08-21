@@ -5,6 +5,24 @@ import { supabase } from "../lib/supabaseClient";
 import { Notification } from "../types";
 import VaagdeviLogo from "../assets/VaagdeviLogo.png";
 
+import {
+  Search,
+  Bell,
+  User,
+  LogOut,
+  Menu,
+  X,
+  Home,
+  ShieldCheck,
+  Plus,
+  MapPin,
+  Package,
+  AlertCircle,
+  ChevronDown,
+  Clock,
+  CheckCircle2,
+} from "lucide-react";
+
 type SearchItem = {
   id: string;
   title: string;
@@ -18,16 +36,20 @@ export function Navbar() {
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [open, setOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-
-  const notificationRef = useRef<HTMLDivElement>(null);
-  const profileRef = useRef<HTMLDivElement>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
   const [searching, setSearching] = useState(false);
 
+  const notificationRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * LOAD NOTIFICATIONS
+   */
   useEffect(() => {
     if (!profile) return;
 
@@ -64,31 +86,38 @@ export function Navbar() {
       supabase.removeChannel(channel);
     };
   }, [profile?.id]);
+
+  /*
+   * CLOSE DROPDOWNS WHEN CLICKING OUTSIDE
+   */
   useEffect(() => {
-  function handleOutsideClick(event: MouseEvent) {
-    const target = event.target as Node;
+    function handleOutsideClick(event: MouseEvent) {
+      const target = event.target as Node;
 
-    if (
-      notificationRef.current &&
-      !notificationRef.current.contains(target)
-    ) {
-      setOpen(false);
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(target)
+      ) {
+        setNotificationOpen(false);
+      }
+
+      if (
+        profileRef.current &&
+        !profileRef.current.contains(target)
+      ) {
+        setProfileOpen(false);
+      }
     }
 
-    if (
-      profileRef.current &&
-      !profileRef.current.contains(target)
-    ) {
-      setProfileOpen(false);
-    }
-  }
+    document.addEventListener("mousedown", handleOutsideClick);
 
-  document.addEventListener("mousedown", handleOutsideClick);
-
-  return () => {
-    document.removeEventListener("mousedown", handleOutsideClick);
-  };
-}, []);
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleOutsideClick
+      );
+    };
+  }, []);
 
   /*
    * SEARCH ITEMS
@@ -133,6 +162,9 @@ export function Navbar() {
     (notification) => !notification.is_read
   ).length;
 
+  /*
+   * MARK ALL NOTIFICATIONS READ
+   */
   async function markAllRead() {
     if (!profile) return;
 
@@ -150,69 +182,129 @@ export function Navbar() {
     );
   }
 
+  /*
+   * OPEN SEARCH RESULT
+   */
   function openSearchItem(itemId: string) {
     setSearch("");
     setSearchResults([]);
+    setMobileOpen(false);
     navigate(`/items/${itemId}`);
   }
 
+  /*
+   * CLOSE MOBILE MENU
+   */
+  function closeMobileMenu() {
+    setMobileOpen(false);
+  }
+
+  /*
+   * GET USER INITIAL
+   */
+  const userInitial =
+    profile?.full_name?.charAt(0)?.toUpperCase() || "U";
+
+  /*
+   * GUEST NAVBAR
+   */
+  if (!profile) {
+    return (
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center px-4">
+          <Link
+            to="/"
+            className="group flex items-center gap-3"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200 transition group-hover:shadow-md">
+              <img
+                src={VaagdeviLogo}
+                alt="Vaagdevi College Logo"
+                className="h-full w-full object-cover"
+              />
+            </div>
+
+            <div>
+              <h2 className="font-display text-base font-bold text-slate-900 sm:text-lg">
+                Vaagdevi Lost Found
+              </h2>
+
+              <p className="hidden text-xs text-slate-500 sm:block">
+                Vaagdevi College
+              </p>
+            </div>
+          </Link>
+        </div>
+      </header>
+    );
+  }
+
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+    <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl">
+      <div className="mx-auto w-full max-w-6xl px-3 sm:px-4">
 
-        {/* LOGO */}
-        <Link to="/" className="flex items-center gap-3">
+        {/* =====================================================
+            MAIN NAVBAR
+        ====================================================== */}
 
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-slate-200">
-            <img
-              src={VaagdeviLogo}
-              alt="Vaagdevi College Logo"
-              className="h-full w-full scale-[1.08] object-cover"
-            />
-          </div>
+        <div className="flex h-[68px] items-center justify-between gap-2">
 
-          <div className="hidden sm:block">
-            <h2 className="font-display text-lg font-bold text-slate-900">
-              Vaagdevi Lost Found
-            </h2>
+          {/* ===================================================
+              LOGO
+          =================================================== */}
 
-            <p className="text-xs text-slate-500">
-              Vaagdevi College
-            </p>
-          </div>
+          <Link
+            to="/"
+            onClick={closeMobileMenu}
+            className="group flex min-w-0 shrink-0 items-center gap-2 sm:gap-3"
+          >
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md sm:h-12 sm:w-12">
+              <img
+                src={VaagdeviLogo}
+                alt="Vaagdevi College Logo"
+                className="h-full w-full scale-[1.05] object-cover"
+              />
+            </div>
 
-        </Link>
+            <div className="hidden sm:block">
+              <h2 className="font-display text-base font-bold leading-tight text-slate-900 md:text-lg">
+                Vaagdevi Lost Found
+              </h2>
 
-        {profile && (
-          <nav className="flex items-center gap-2">
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+
+                <p className="text-[11px] text-slate-500">
+                  Vaagdevi College
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          {/* ===================================================
+              DESKTOP NAV
+          =================================================== */}
+
+          <nav className="hidden items-center gap-1.5 lg:flex">
 
             {/* DASHBOARD */}
+
             <Link
               to="/"
-              className="btn-ghost hidden sm:inline-flex"
+              className="group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-100 hover:text-slate-900"
             >
-              Dashboard
+              <Home className="h-4 w-4 text-slate-400 transition group-hover:text-blue-600" />
+
+              <span>Dashboard</span>
             </Link>
 
             {/* SEARCH */}
-            <div className="relative hidden lg:block">
 
-              <div className="flex w-72 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 transition focus-within:border-blue-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-500/10">
+            <div className="relative">
 
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="mr-2 shrink-0 text-slate-400"
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-4-4" />
-                </svg>
+              <div className="flex w-64 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 transition-all focus-within:border-blue-400 focus-within:bg-white focus-within:shadow-sm focus-within:ring-4 focus-within:ring-blue-500/10 xl:w-72">
+
+                <Search className="mr-2 h-[18px] w-[18px] shrink-0 text-slate-400" />
 
                 <input
                   type="text"
@@ -227,40 +319,29 @@ export function Navbar() {
                 {searching && (
                   <div className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
                 )}
-
               </div>
 
               {/* SEARCH RESULTS */}
+
               {search.trim() && (
-                <div className="absolute right-0 top-full mt-2 w-96 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <div className="absolute right-0 top-full mt-2 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl xl:w-96">
 
                   {searching ? (
-                    <div className="px-4 py-5 text-center text-sm text-slate-400">
-                      Searching...
+                    <div className="px-4 py-6 text-center">
+                      <div className="mx-auto mb-2 h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
+
+                      <p className="text-sm text-slate-400">
+                        Searching...
+                      </p>
                     </div>
                   ) : searchResults.length === 0 ? (
-                    <div className="px-4 py-6 text-center">
+                    <div className="px-4 py-7 text-center">
 
-                      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
-
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="text-slate-400"
-                        >
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="m20 20-4-4" />
-                        </svg>
-
+                      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-slate-100">
+                        <Search className="h-5 w-5 text-slate-400" />
                       </div>
 
-                      <p className="mt-2 text-sm font-medium text-slate-700">
+                      <p className="mt-3 text-sm font-semibold text-slate-700">
                         No items found
                       </p>
 
@@ -272,10 +353,16 @@ export function Navbar() {
                   ) : (
                     <div className="max-h-96 overflow-y-auto py-2">
 
-                      <div className="px-4 py-2">
+                      <div className="flex items-center justify-between px-4 py-2">
+
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                           Search results
                         </p>
+
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                          {searchResults.length}
+                        </span>
+
                       </div>
 
                       {searchResults.map((item) => (
@@ -285,62 +372,39 @@ export function Navbar() {
                           onClick={() =>
                             openSearchItem(item.id)
                           }
-                          className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
+                          className="group flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
                         >
 
-                          {/* ITEM ICON */}
                           <div
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105 ${
                               item.type === "lost"
                                 ? "bg-red-50 text-red-600"
                                 : "bg-emerald-50 text-emerald-600"
                             }`}
                           >
                             {item.type === "lost" ? (
-                              <svg
-                                width="19"
-                                height="19"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <circle cx="12" cy="12" r="9" />
-                                <path d="M12 8v4" />
-                                <path d="M12 16h.01" />
-                              </svg>
+                              <AlertCircle className="h-[19px] w-[19px]" />
                             ) : (
-                              <svg
-                                width="19"
-                                height="19"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M20 7h-9l-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z" />
-                              </svg>
+                              <Package className="h-[19px] w-[19px]" />
                             )}
                           </div>
 
-                          {/* ITEM INFO */}
                           <div className="min-w-0 flex-1">
 
                             <p className="truncate text-sm font-semibold text-slate-800">
                               {item.title}
                             </p>
 
-                            <p className="mt-0.5 truncate text-xs text-slate-500">
-                              {item.location}
-                            </p>
+                            <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                              <MapPin className="h-3 w-3 shrink-0" />
+
+                              <span className="truncate">
+                                {item.location || "Location unavailable"}
+                              </span>
+                            </div>
 
                           </div>
 
-                          {/* TYPE */}
                           <span
                             className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
                               item.type === "lost"
@@ -355,124 +419,219 @@ export function Navbar() {
 
                         </button>
                       ))}
-
                     </div>
                   )}
-
                 </div>
               )}
-
             </div>
+          </nav>
 
-            {/* REPORT */}
+          {/* ===================================================
+              RIGHT SIDE
+          =================================================== */}
+
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+
+            {/* REPORT ITEM */}
+
             <Link
               to="/report"
-              className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl"
+              className="hidden items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg sm:inline-flex lg:px-5"
             >
-              + Report Item
+              <Plus className="h-4 w-4" />
+
+              <span>Report Item</span>
             </Link>
 
-            {/* NOTIFICATIONS */}
-<div ref={notificationRef} className="relative">
+            {/* =================================================
+                NOTIFICATIONS
+            ================================================= */}
 
-  <button
-    className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white transition hover:bg-slate-100"
+            <div
+              ref={notificationRef}
+              className="relative"
+            >
+
+              <button
+                type="button"
+                className={`relative flex h-10 w-10 items-center justify-center rounded-xl border transition-all ${
+                  notificationOpen
+                    ? "border-blue-200 bg-blue-50"
+                    : "border-slate-200 bg-white hover:bg-slate-100"
+                }`}
                 onClick={() => {
-                  setOpen((value) => !value);
+                  setNotificationOpen(
+                    (value) => !value
+                  );
 
-                  if (!open) {
+                  if (!notificationOpen) {
                     markAllRead();
                   }
                 }}
                 aria-label="Notifications"
               >
 
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-slate-600"
-                >
-                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-                  <path d="M13.7 21a2 2 0 0 1-3.4 0" />
-                </svg>
+                <Bell
+                  className={`h-5 w-5 ${
+                    notificationOpen
+                      ? "text-blue-600"
+                      : "text-slate-600"
+                  }`}
+                />
 
                 {unreadCount > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-red-500 text-[10px] text-white">
-                    {unreadCount}
+                  <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
+                    {unreadCount > 9
+                      ? "9+"
+                      : unreadCount}
                   </span>
                 )}
 
               </button>
 
-              {open && (
-                <div className="absolute right-0 mt-2 max-h-96 w-80 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+              {/* NOTIFICATION DROPDOWN */}
 
-                  {notifications.length === 0 && (
-                    <p className="p-3 text-sm text-slate-400">
-                      No notifications yet.
-                    </p>
-                  )}
+              {notificationOpen && (
+                <div className="absolute right-0 top-full mt-2 w-[calc(100vw-24px)] max-w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:w-80">
 
-                  {notifications.map((notification) => (
-                    <button
-                      key={notification.id}
-                      onClick={() => {
-                        setOpen(false);
+                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
 
-                        if (notification.link_item_id) {
-                          navigate(
-                            `/items/${notification.link_item_id}`
-                          );
-                        } else {
-                          navigate("/");
-                        }
-                      }}
-                      className="block w-full rounded-xl p-3 text-left transition hover:bg-slate-50"
-                    >
-
-                      <p className="text-sm font-semibold text-slate-800">
-                        {notification.title}
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">
+                        Notifications
                       </p>
 
-                      {notification.body && (
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          {notification.body}
-                        </p>
-                      )}
+                      <p className="mt-0.5 text-[11px] text-slate-400">
+                        Latest activity
+                      </p>
+                    </div>
 
-                    </button>
-                  ))}
+                    {unreadCount > 0 && (
+                      <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-600">
+                        {unreadCount} new
+                      </span>
+                    )}
+
+                  </div>
+
+                  <div className="max-h-96 overflow-y-auto p-2">
+
+                    {notifications.length === 0 && (
+                      <div className="px-4 py-8 text-center">
+
+                        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-slate-100">
+                          <Bell className="h-5 w-5 text-slate-400" />
+                        </div>
+
+                        <p className="mt-3 text-sm font-semibold text-slate-700">
+                          No notifications
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-400">
+                          You're all caught up.
+                        </p>
+
+                      </div>
+                    )}
+
+                    {notifications.map(
+                      (notification) => (
+                        <button
+                          key={notification.id}
+                          type="button"
+                          onClick={() => {
+                            setNotificationOpen(
+                              false
+                            );
+
+                            if (
+                              notification.link_item_id
+                            ) {
+                              navigate(
+                                `/items/${notification.link_item_id}`
+                              );
+                            } else {
+                              navigate("/");
+                            }
+                          }}
+                          className="group flex w-full gap-3 rounded-xl p-3 text-left transition hover:bg-slate-50"
+                        >
+
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                            <Bell className="h-4 w-4" />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+
+                            <p className="text-sm font-semibold text-slate-800">
+                              {notification.title}
+                            </p>
+
+                            {notification.body && (
+                              <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-500">
+                                {notification.body}
+                              </p>
+                            )}
+
+                            <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-400">
+                              <Clock className="h-3 w-3" />
+                              Recent activity
+                            </div>
+
+                          </div>
+
+                          {!notification.is_read && (
+                            <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-blue-600" />
+                          )}
+
+                        </button>
+                      )
+                    )}
+
+                  </div>
 
                 </div>
               )}
-
             </div>
 
-            {/* PROFILE */}
-<div ref={profileRef} className="relative">
+            {/* =================================================
+                PROFILE
+            ================================================= */}
 
-  <button
-    onClick={() =>
-      setProfileOpen((value) => !value)
-    }
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:bg-slate-50"
+            <div
+              ref={profileRef}
+              className="relative hidden sm:block"
+            >
+
+              <button
+                type="button"
+                onClick={() =>
+                  setProfileOpen(
+                    (value) => !value
+                  )
+                }
+                className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 transition-all md:px-3 md:py-2 ${
+                  profileOpen
+                    ? "border-blue-200 bg-blue-50"
+                    : "border-slate-200 bg-white hover:bg-slate-50"
+                }`}
               >
 
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-sm font-bold text-white">
-                  {profile.full_name
-                    ?.charAt(0)
-                    ?.toUpperCase() || "U"}
+                <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-sm font-bold text-white shadow-sm">
+
+                  {userInitial}
+
+                  {profile.is_verified && (
+                    <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white">
+                      <CheckCircle2 className="h-3 w-3 fill-emerald-500 text-emerald-500" />
+                    </span>
+                  )}
+
                 </div>
 
                 <div className="hidden text-left md:block">
 
-                  <p className="text-sm font-semibold text-slate-900">
+                  <p className="max-w-28 truncate text-sm font-semibold text-slate-900">
                     {profile.full_name}
                   </p>
 
@@ -482,75 +641,124 @@ export function Navbar() {
 
                 </div>
 
-                <span className="text-xs text-slate-400">
-                  ▼
-                </span>
+                <ChevronDown
+                  className={`h-4 w-4 text-slate-400 transition-transform ${
+                    profileOpen
+                      ? "rotate-180"
+                      : ""
+                  }`}
+                />
 
               </button>
 
+              {/* PROFILE DROPDOWN */}
+
               {profileOpen && (
-                <div className="absolute right-0 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                <div className="absolute right-0 top-full mt-2 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
 
-                  <div className="border-b border-slate-100 px-3 py-3">
+                  {/* USER HEADER */}
 
-                    <p className="font-semibold text-slate-900">
-                      {profile.full_name}
-                    </p>
+                  <div className="rounded-xl bg-gradient-to-br from-slate-50 to-blue-50/50 px-3 py-3">
 
-                    <p className="mt-1 text-xs text-slate-500">
-                      Roll No: {profile.college_id}
-                    </p>
+                    <div className="flex items-center gap-3">
 
-                    <p className="mt-1 break-all text-xs text-slate-500">
-                      {profile.email}
-                    </p>
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-lg font-bold text-white">
+                        {userInitial}
+                      </div>
+
+                      <div className="min-w-0">
+
+                        <div className="flex items-center gap-1.5">
+
+                          <p className="truncate font-semibold text-slate-900">
+                            {profile.full_name}
+                          </p>
+
+                          {profile.is_verified && (
+                            <CheckCircle2 className="h-4 w-4 shrink-0 fill-emerald-500 text-emerald-500" />
+                          )}
+
+                        </div>
+
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {profile.role === "admin"
+                            ? "Administrator"
+                            : profile.role ===
+                              "faculty"
+                            ? "Faculty"
+                            : "Student"}
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                    <div className="mt-3 space-y-1.5">
+
+                      <p className="text-xs text-slate-500">
+                        Roll No:{" "}
+                        <span className="font-semibold text-slate-700">
+                          {profile.college_id ||
+                            "-"}
+                        </span>
+                      </p>
+
+                      <p className="break-all text-xs text-slate-500">
+                        {profile.email}
+                      </p>
+
+                    </div>
 
                   </div>
 
+                  {/* PROFILE */}
+
                   <Link
                     to="/profile"
-                    onClick={() => setProfileOpen(false)}
-                    className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() =>
+                      setProfileOpen(false)
+                    }
+                    className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <circle cx="12" cy="8" r="4" />
-                      <path d="M4 21a8 8 0 0 1 16 0" />
-                    </svg>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+                      <User className="h-4 w-4 text-slate-600" />
+                    </div>
 
                     <span>My Profile</span>
                   </Link>
 
+                  {/* ADMIN */}
+
+                  {profile.role === "admin" && (
+                    <Link
+                      to="/admin"
+                      onClick={() =>
+                        setProfileOpen(false)
+                      }
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-purple-50 hover:text-purple-700"
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50">
+                        <ShieldCheck className="h-4 w-4 text-purple-600" />
+                      </div>
+
+                      <span>Admin Control Center</span>
+                    </Link>
+                  )}
+
+                  {/* SIGN OUT */}
+
                   <button
+                    type="button"
                     onClick={async () => {
                       setProfileOpen(false);
                       await signOut();
                     }}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                    className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
                   >
 
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M10 17l5-5-5-5" />
-                      <path d="M15 12H3" />
-                      <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
-                    </svg>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50">
+                      <LogOut className="h-4 w-4 text-red-600" />
+                    </div>
 
                     <span>Sign Out</span>
 
@@ -558,22 +766,303 @@ export function Navbar() {
 
                 </div>
               )}
-
             </div>
 
-            {/* ADMIN */}
+            {/* =================================================
+                ADMIN DESKTOP
+            ================================================= */}
+
             {profile.role === "admin" && (
               <Link
                 to="/admin"
-                className="btn-ghost hidden sm:inline-flex"
+                className="hidden items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-purple-700 lg:inline-flex"
               >
-                Admin
+                <ShieldCheck className="h-4 w-4" />
+
+                <span>Admin</span>
               </Link>
             )}
 
-          </nav>
-        )}
+            {/* =================================================
+                MOBILE MENU BUTTON
+            ================================================= */}
 
+            <button
+              type="button"
+              onClick={() =>
+                setMobileOpen(
+                  (value) => !value
+                )
+              }
+              className={`flex h-10 w-10 items-center justify-center rounded-xl border transition-all lg:hidden ${
+                mobileOpen
+                  ? "border-blue-200 bg-blue-50 text-blue-600"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+              }`}
+              aria-label="Open menu"
+              aria-expanded={mobileOpen}
+            >
+
+              {mobileOpen ? (
+                <X className="h-[22px] w-[22px]" />
+              ) : (
+                <Menu className="h-[22px] w-[22px]" />
+              )}
+
+            </button>
+
+          </div>
+        </div>
+
+        {/* =====================================================
+            MOBILE MENU
+        ====================================================== */}
+
+        {mobileOpen && (
+          <div className="border-t border-slate-100 py-3 lg:hidden">
+
+            {/* MOBILE SEARCH */}
+
+            <div className="relative mb-3">
+
+              <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 transition focus-within:border-blue-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-500/10">
+
+                <Search className="mr-2 h-[18px] w-[18px] shrink-0 text-slate-400" />
+
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(event) =>
+                    setSearch(event.target.value)
+                  }
+                  placeholder="Search lost & found..."
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+                />
+
+                {searching && (
+                  <div className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+                )}
+
+              </div>
+
+              {/* MOBILE SEARCH RESULTS */}
+
+              {search.trim() && (
+                <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+
+                  {searching ? (
+                    <div className="p-5 text-center">
+
+                      <div className="mx-auto mb-2 h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
+
+                      <p className="text-sm text-slate-400">
+                        Searching...
+                      </p>
+
+                    </div>
+                  ) : searchResults.length === 0 ? (
+                    <div className="p-5 text-center">
+
+                      <Search className="mx-auto h-5 w-5 text-slate-400" />
+
+                      <p className="mt-2 text-sm font-semibold text-slate-700">
+                        No items found
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-400">
+                        Try another item name or location
+                      </p>
+
+                    </div>
+                  ) : (
+                    searchResults.map(
+                      (item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() =>
+                            openSearchItem(
+                              item.id
+                            )
+                          }
+                          className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition hover:bg-slate-50"
+                        >
+
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                              item.type === "lost"
+                                ? "bg-red-50 text-red-600"
+                                : "bg-emerald-50 text-emerald-600"
+                            }`}
+                          >
+                            {item.type ===
+                            "lost" ? (
+                              <AlertCircle className="h-5 w-5" />
+                            ) : (
+                              <Package className="h-5 w-5" />
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+
+                            <p className="truncate text-sm font-semibold text-slate-800">
+                              {item.title}
+                            </p>
+
+                            <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+
+                              <MapPin className="h-3 w-3 shrink-0" />
+
+                              <span className="truncate">
+                                {item.location ||
+                                  "Location unavailable"}
+                              </span>
+
+                            </div>
+
+                          </div>
+
+                          <span
+                            className={`rounded-full px-2 py-1 text-[10px] font-bold ${
+                              item.type ===
+                              "lost"
+                                ? "bg-red-50 text-red-600"
+                                : "bg-emerald-50 text-emerald-600"
+                            }`}
+                          >
+                            {item.type.toUpperCase()}
+                          </span>
+
+                        </button>
+                      )
+                    )
+                  )}
+
+                </div>
+              )}
+            </div>
+
+            {/* MOBILE NAV LINKS */}
+
+            <div className="grid gap-2">
+
+              {/* DASHBOARD */}
+
+              <Link
+                to="/"
+                onClick={closeMobileMenu}
+                className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
+              >
+                <Home className="h-4 w-4 text-slate-500" />
+
+                <span>Dashboard</span>
+              </Link>
+
+              {/* REPORT */}
+
+              <Link
+                to="/report"
+                onClick={closeMobileMenu}
+                className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-md"
+              >
+                <Plus className="h-4 w-4" />
+
+                <span>
+                  Report Lost / Found Item
+                </span>
+              </Link>
+
+              {/* PROFILE */}
+
+              <Link
+                to="/profile"
+                onClick={closeMobileMenu}
+                className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
+              >
+                <User className="h-4 w-4 text-slate-500" />
+
+                <span>My Profile</span>
+              </Link>
+
+              {/* ADMIN */}
+
+              {profile.role === "admin" && (
+                <Link
+                  to="/admin"
+                  onClick={closeMobileMenu}
+                  className="flex items-center gap-3 rounded-xl bg-purple-50 px-4 py-3 text-sm font-semibold text-purple-700 transition hover:bg-purple-100"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+
+                  <span>Admin Panel</span>
+                </Link>
+              )}
+
+              {/* SIGN OUT */}
+
+              <button
+                type="button"
+                onClick={async () => {
+                  closeMobileMenu();
+                  await signOut();
+                }}
+                className="flex items-center gap-3 rounded-xl bg-red-50 px-4 py-3 text-left text-sm font-semibold text-red-600 transition hover:bg-red-100"
+              >
+                <LogOut className="h-4 w-4" />
+
+                <span>Sign Out</span>
+              </button>
+
+            </div>
+
+            {/* MOBILE USER INFO */}
+
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+              <div className="flex items-center gap-3">
+
+                <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-lg font-bold text-white">
+
+                  {userInitial}
+
+                  {profile.is_verified && (
+                    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white">
+                      <CheckCircle2 className="h-3.5 w-3.5 fill-emerald-500 text-emerald-500" />
+                    </span>
+                  )}
+
+                </div>
+
+                <div className="min-w-0">
+
+                  <div className="flex items-center gap-1.5">
+
+                    <p className="truncate text-sm font-bold text-slate-900">
+                      {profile.full_name}
+                    </p>
+
+                    {profile.is_verified && (
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 fill-emerald-500 text-emerald-500" />
+                    )}
+
+                  </div>
+
+                  <p className="truncate text-xs text-slate-500">
+                    {profile.college_id}
+                  </p>
+
+                  <p className="truncate text-xs text-slate-400">
+                    {profile.email}
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
       </div>
     </header>
   );
